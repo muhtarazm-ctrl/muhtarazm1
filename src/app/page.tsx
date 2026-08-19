@@ -152,7 +152,7 @@ const initialInAppNotifications: InAppNotification[] = [
 const initialStaff: Profile[] = [
   {
     id: 'staff-admin',
-    full_name: 'سعود المخترز (المدير العام)',
+    full_name: 'سعود المحترز (المدير العام)',
     email: 'admin@almuhtaraz.com',
     phone: '+966500000001',
     role: 'admin',
@@ -448,7 +448,7 @@ export default function Home() {
       recipient_phone: customerObj.phone,
       recipient_name: customerObj.name,
       notification_type: 'contract_created',
-      message_body: `مرحباً ${customerObj.name}، تم توثيق عقدك رقم (${newContract.contract_number}) بنجاح لدى المخترز للحاويات. رقم الحاوية: ${containerObj?.container_number || '-'}. شكراً لثقتكم بنا.`,
+      message_body: `مرحباً ${customerObj.name}، تم توثيق عقدك رقم (${newContract.contract_number}) بنجاح لدى المحترز للحاويات. رقم الحاوية: ${containerObj?.container_number || '-'}. شكراً لثقتكم بنا.`,
       scheduled_for: new Date().toISOString(),
       status: 'pending',
       created_at: new Date().toISOString()
@@ -651,7 +651,7 @@ export default function Home() {
         color: '#64748b',
         fontSize: '0.85rem'
       }}>
-        المخترز للحاويات © {new Date().getFullYear()} — نظام إدارة وتأجير الحاويات التجارية والأنقاض والمواقع الجغرافية
+        المحترز للحاويات © {new Date().getFullYear()} — نظام إدارة وتأجير الحاويات التجارية والأنقاض والمواقع الجغرافية
       </footer>
     </div>
   );

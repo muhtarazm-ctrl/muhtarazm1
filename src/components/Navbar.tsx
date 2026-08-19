@@ -77,7 +77,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <div>
             <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', letterSpacing: '-0.5px' }}>
-              المخترز <span style={{ color: 'var(--accent-gold)' }}>للحاويات</span>
+              المحترز <span style={{ color: 'var(--accent-gold)' }}>للحاويات</span>
             </div>
             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
               إدارة وتأجير الحاويات التجارية والأنقاض

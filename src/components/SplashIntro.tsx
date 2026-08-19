@@ -39,7 +39,7 @@ export const SplashIntro: React.FC<SplashIntroProps> = ({ onComplete }) => {
           <Truck size={48} color="#050811" strokeWidth={2.5} />
         </div>
 
-        <h1 className="splash-title">المخترز للحاويات</h1>
+        <h1 className="splash-title">المحترز للحاويات</h1>
 
         <div className="splash-subtitle">
           أنظمة إدارة وتأجير الحاويات التجارية والأنقاض

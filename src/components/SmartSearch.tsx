@@ -454,7 +454,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                         style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                         onClick={() => onSendWhatsApp(
                           contract.customer!.phone,
-                          `مرحباً ${contract.customer?.name}، بخصوص عقد الحاوية رقم (${contract.contract_number}) من المخترز للحاويات.`
+                          `مرحباً ${contract.customer?.name}، بخصوص عقد الحاوية رقم (${contract.contract_number}) من المحترز للحاويات.`
                         )}
                       >
                         <MessageCircle size={14} />

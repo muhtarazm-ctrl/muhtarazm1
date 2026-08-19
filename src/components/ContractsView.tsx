@@ -232,7 +232,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                     style={{ padding: '6px 12px', fontSize: '0.8rem' }}
                     onClick={() => onSendWhatsApp(
                       contract.customer!.phone,
-                      `مرحباً ${contract.customer?.name}، نود تذكيركم بخصوص عقد الحاوية رقم (${contract.contract_number}) لدى المخترز للحاويات.`
+                      `مرحباً ${contract.customer?.name}، نود تذكيركم بخصوص عقد الحاوية رقم (${contract.contract_number}) لدى المحترز للحاويات.`
                     )}
                   >
                     <MessageCircle size={14} />
