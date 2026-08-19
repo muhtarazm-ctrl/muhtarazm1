@@ -31,6 +31,7 @@ import { PaymentSettings } from '@/components/PaymentSettings';
 import { NewContractModal } from '@/components/NewContractModal';
 import { ReceiptModal } from '@/components/ReceiptModal';
 import { ExtendContractModal } from '@/components/ExtendContractModal';
+import { InventoryManagement } from '@/components/InventoryManagement';
 
 // Sample Seed Data
 const initialStaff: Profile[] = [
@@ -631,7 +632,7 @@ export default function Home() {
     }
   };
 
-  // Add Container Handler
+  // Add Container Handler (Single)
   const handleAddContainer = async (data: Partial<Container>): Promise<boolean> => {
     const newCont: Container = {
       id: `cont-${Date.now()}`,
@@ -661,6 +662,88 @@ export default function Home() {
     }
 
     return true;
+  };
+
+  // 📦 Batch Add Containers Handler (Bulk Intake)
+  const handleBatchAddContainers = async (newContainers: Partial<Container>[]): Promise<boolean> => {
+    const createdList: Container[] = newContainers.map((item, idx) => ({
+      id: `cont-${Date.now()}-${idx}`,
+      container_number: item.container_number || `CONT-${idx}`,
+      type: item.type || 'debris',
+      status: 'available',
+      daily_rate: item.daily_rate || 0,
+      monthly_rate: item.monthly_rate || 0,
+      notes: item.notes,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    }));
+
+    setContainers(prev => [...createdList, ...prev]);
+
+    // In-App Notification (🔔)
+    const inAppNotif: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      title: `📦 تم توريد دفعة مخزون جديدة (${createdList.length} حاوية)`,
+      message: `تم إدراج (${createdList.length}) حاوية جديدة إلى مخزون الحاويات المتاحة بنجاح.`,
+      type: 'system_alert',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [inAppNotif, ...prev]);
+
+    try {
+      const insertRows = createdList.map(c => ({
+        container_number: c.container_number,
+        type: c.type,
+        status: c.status,
+        daily_rate: c.daily_rate,
+        monthly_rate: c.monthly_rate,
+        notes: c.notes
+      }));
+      await supabase.from('containers').insert(insertRows);
+    } catch (err) {
+      console.warn('Synced batch locally:', err);
+    }
+
+    return true;
+  };
+
+  // 📥 Two-Way Return to Stock: Complete Contract & Set Container to Available 🟢
+  const handleCompleteContractAndReturnToStock = async (contractId: string, containerId: string) => {
+    const contract = contracts.find(c => c.id === contractId);
+    const container = containers.find(c => c.id === containerId);
+
+    // 1. Update Contract to 'completed'
+    setContracts(prev => prev.map(c => c.id === contractId ? { ...c, status: 'completed' } : c));
+
+    // 2. Return Container to 'available' 🟢
+    setContainers(prev => prev.map(c => c.id === containerId ? { ...c, status: 'available' } : c));
+
+    // 3. In-App Notification (🔔)
+    const inAppNotif: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      contract_id: contractId,
+      title: `📥 استلام الحاوية (${container?.container_number || '-'}) للمخزون`,
+      message: `تم سحب الحاوية بنجاح وإنهاء العقد (${contract?.contract_number || '-'}). الحاوية الآن متاحة للتأجير 🟢.`,
+      type: 'container_status_change',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [inAppNotif, ...prev]);
+
+    // Trigger celebration
+    confetti({
+      particleCount: 50,
+      spread: 60,
+      origin: { y: 0.6 }
+    });
+
+    try {
+      await supabase.from('contracts').update({ status: 'completed' }).eq('id', contractId);
+      await supabase.from('containers').update({ status: 'available' }).eq('id', containerId);
+    } catch (err) {
+      console.warn('Synced return to stock locally:', err);
+    }
   };
 
   // Delete Container Handler (Admin)
@@ -1000,6 +1083,22 @@ export default function Home() {
             notifications={notifications}
             onMarkAsSent={handleMarkNotificationSent}
             onSendWhatsApp={handleSendWhatsApp}
+          />
+        )}
+
+        {currentTab === 'inventory' && currentRole === 'admin' && (
+          <InventoryManagement
+            containers={containers}
+            contracts={contracts}
+            onBatchAddContainers={handleBatchAddContainers}
+            onUpdateContainerStatus={handleUpdateContainerStatus}
+            onCompleteContractAndReturnToStock={handleCompleteContractAndReturnToStock}
+            onDeleteContainer={handleDeleteContainer}
+            onOpenNewContract={(cId) => {
+              setPreSelectedContainerId(cId);
+              setIsContractModalOpen(true);
+            }}
+            onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
           />
         )}
 

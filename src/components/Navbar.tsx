@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   UserCheck,
   Settings,
-  CreditCard
+  CreditCard,
+  Package
 } from 'lucide-react';
 import { InAppNotification, UserRole } from '@/types/database';
 import { NotificationBell } from './NotificationBell';
@@ -184,6 +185,29 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Admin only Tabs */}
           {currentRole === 'admin' && (
             <>
+              <button
+                id="nav-inventory-tab"
+                onClick={() => setCurrentTab('inventory')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  background: currentTab === 'inventory' ? 'rgba(56, 189, 248, 0.2)' : 'transparent',
+                  color: currentTab === 'inventory' ? '#38bdf8' : '#94a3b8',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Package size={17} />
+                <span>إدارة المخزون والتوريد</span>
+              </button>
+
               <button
                 id="nav-staff-tab"
                 onClick={() => setCurrentTab('staff')}
