@@ -24,7 +24,8 @@ import {
   MessageSquare,
   Lock,
   Unlock,
-  Sparkles,
+  ChevronDown,
+  ChevronUp,
   X,
   Check
 } from 'lucide-react';
@@ -41,12 +42,12 @@ interface StaffManagementProps {
 // Default permissions for new driver vs staff
 export const DEFAULT_DRIVER_PERMISSIONS: StaffPermissions = {
   can_view_all_contracts: false,
-  can_view_financials: false, // Hidden by default for field drivers
+  can_view_financials: false, // Hidden for drivers
   can_create_contracts: false,
   can_extend_contracts: true, // Can extend on-site
-  can_collect_payments: true, // Can collect COD cash & issue receipt
+  can_collect_payments: true, // Can collect COD cash
   can_send_payment_links: false,
-  can_manage_inventory: true, // Can return container to stock on pickup
+  can_manage_inventory: true, // Can return container to stock
   can_send_whatsapp: true
 };
 
@@ -74,31 +75,25 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('+9665');
   const [jobRole, setJobRole] = useState<'driver' | 'staff'>('driver');
+  const [isPermissionsDropdownOpenInAdd, setIsPermissionsDropdownOpenInAdd] = useState(true);
+  const [newStaffPermissions, setNewStaffPermissions] = useState<StaffPermissions>(DEFAULT_STAFF_PERMISSIONS);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Edit Permissions Modal State
-  const [selectedStaffForPerms, setSelectedStaffForPerms] = useState<Profile | null>(null);
-  const [tempPermissions, setTempPermissions] = useState<StaffPermissions>(DEFAULT_DRIVER_PERMISSIONS);
-  const [isSavingPerms, setIsSavingPerms] = useState(false);
+  // Table active dropdown popup ID for permissions
+  const [openDropdownStaffId, setOpenDropdownStaffId] = useState<string | null>(null);
 
   const maxStaffLimit = 10;
   const currentCount = staffList.length;
 
-  const handleOpenPermsModal = (staff: Profile) => {
-    setSelectedStaffForPerms(staff);
-    const existingPerms: StaffPermissions = staff.permissions || (
-      staff.full_name.includes('سائق') ? { ...DEFAULT_DRIVER_PERMISSIONS, can_view_all_contracts: staff.can_view_all_records } : { ...DEFAULT_STAFF_PERMISSIONS, can_view_all_contracts: staff.can_view_all_records }
+  const handleTogglePermission = async (staff: Profile, key: keyof StaffPermissions) => {
+    const currentPerms: StaffPermissions = staff.permissions || (
+      staff.full_name.includes('سائق') ? DEFAULT_DRIVER_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS
     );
-    setTempPermissions(existingPerms);
-  };
-
-  const handleSavePermsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedStaffForPerms) return;
-    setIsSavingPerms(true);
-    await onUpdatePermissions(selectedStaffForPerms.id, tempPermissions);
-    setIsSavingPerms(false);
-    setSelectedStaffForPerms(null);
+    const updatedPerms: StaffPermissions = {
+      ...currentPerms,
+      [key]: !currentPerms[key]
+    };
+    await onUpdatePermissions(staff.id, updatedPerms);
   };
 
   const handleSubmitNewStaff = async (e: React.FormEvent) => {
@@ -109,15 +104,16 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
     }
 
     setIsSubmitting(true);
-    const roleTitle = jobRole === 'driver' ? '(سائق رافعة وتوصيل)' : '(موظف استقبال ومتابعة)';
-    const initialPerms = jobRole === 'driver' ? DEFAULT_DRIVER_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS;
+    const isDriver = jobRole === 'driver';
+    const roleTitle = isDriver ? '(سائق رافعة وتوصيل)' : '(موظف استقبال ومتابعة)';
+    const assignedPerms = isDriver ? DEFAULT_DRIVER_PERMISSIONS : newStaffPermissions;
 
     const success = await onAddStaff({
       full_name: `${fullName} ${roleTitle}`,
       email,
       phone,
-      can_view_all_records: initialPerms.can_view_all_contracts,
-      permissions: initialPerms
+      can_view_all_records: assignedPerms.can_view_all_contracts,
+      permissions: assignedPerms
     });
     setIsSubmitting(false);
 
@@ -127,6 +123,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
       setEmail('');
       setPhone('+9665');
       setJobRole('driver');
+      setNewStaffPermissions(DEFAULT_STAFF_PERMISSIONS);
     }
   };
 
@@ -141,16 +138,19 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
             <span>خاص بالمدير العام</span>
           </div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-            إدارة الموظفين ومصفوفة الصلاحيات الميدانية
+            إدارة الموظفين والصلاحيات المنسدلة
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            التحكم الشامل في صلاحيات كل موظف وسائق (رؤية المبالغ، إنشاء العقود، التمديد، تحصيل الكاش، وإدارة المخزون)
+            التحكم في صلاحيات الموظفين عبر القوائم المنسدلة الأنيقة، وتعيين السائقين الميدانيين تلقائياً
           </p>
         </div>
 
         <button
           className="btn-primary"
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={() => {
+            setJobRole('driver');
+            setIsAddModalOpen(true);
+          }}
           disabled={currentCount >= maxStaffLimit}
           style={{ opacity: currentCount >= maxStaffLimit ? 0.6 : 1 }}
         >
@@ -160,13 +160,13 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
       </div>
 
       {/* Staff Table */}
-      <div className="glass-panel" style={{ overflow: 'hidden' }}>
+      <div className="glass-panel" style={{ overflow: 'visible' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
           <thead>
             <tr style={{ background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
               <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>الاسم والدور الوظيفي</th>
               <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>رقم جوال الواتساب</th>
-              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>مصفوفة الصلاحيات الممنوحة 🛡️</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>قائمة الصلاحيات المنسدلة 🛡️</th>
               <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>حالة الحساب</th>
               <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, textAlign: 'center' }}>إجراءات</th>
             </tr>
@@ -176,8 +176,12 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
               const isDriver = staff.full_name.includes('سائق');
               const isAdmin = staff.role === 'admin';
               const perms: StaffPermissions = staff.permissions || (
-                isDriver ? { ...DEFAULT_DRIVER_PERMISSIONS, can_view_all_contracts: staff.can_view_all_records } : { ...DEFAULT_STAFF_PERMISSIONS, can_view_all_contracts: staff.can_view_all_records }
+                isDriver ? DEFAULT_DRIVER_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS
               );
+              const isDropdownOpen = openDropdownStaffId === staff.id;
+
+              // Count active permissions
+              const activePermsCount = Object.values(perms).filter(Boolean).length;
 
               return (
                 <tr 
@@ -229,91 +233,156 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                     </span>
                   </td>
 
-                  {/* Permissions Summary Badges & Edit Button */}
-                  <td style={{ padding: '16px 20px' }}>
+                  {/* Sleek Permissions Dropdown Menu */}
+                  <td style={{ padding: '16px 20px', position: 'relative' }}>
                     {isAdmin ? (
                       <span style={{ color: '#fbbf24', fontSize: '0.82rem', fontWeight: 800 }}>
-                        👑 صلاحيات كاملة غير محدودة (مدير النظام)
+                        👑 صلاحيات كاملة غير محدودة
                       </span>
                     ) : (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                      <div style={{ position: 'relative', display: 'inline-block' }}>
                         
-                        {/* Badges */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
-                          
-                          {/* Financials */}
-                          <span style={{
-                            fontSize: '0.72rem',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontWeight: 700,
-                            background: perms.can_view_financials ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                            color: perms.can_view_financials ? '#34d399' : '#f87171',
-                            border: `1px solid ${perms.can_view_financials ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.3)'}`
-                          }} title="رؤية المبالغ والأسعار">
-                            {perms.can_view_financials ? '💰 المبالغ ظاهرة' : '🔒 المبالغ محجوبة'}
-                          </span>
-
-                          {/* Create Contracts */}
-                          <span style={{
-                            fontSize: '0.72rem',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontWeight: 700,
-                            background: perms.can_create_contracts ? 'rgba(56, 189, 248, 0.15)' : 'rgba(148, 163, 184, 0.15)',
-                            color: perms.can_create_contracts ? '#38bdf8' : '#94a3b8'
-                          }} title="إنشاء وتوثيق عقود جديدة">
-                            📝 {perms.can_create_contracts ? 'إنشاء عقود' : 'حظر الإنشاء'}
-                          </span>
-
-                          {/* Collect Cash */}
-                          {perms.can_collect_payments && (
-                            <span style={{
-                              fontSize: '0.72rem',
-                              padding: '2px 6px',
-                              borderRadius: '4px',
-                              fontWeight: 700,
-                              background: 'rgba(245, 158, 11, 0.15)',
-                              color: '#fbbf24'
-                            }} title="تحصيل كاش وإصدار سند قبض">
-                              💵 تحصيل وسند
-                            </span>
-                          )}
-
-                          {/* Scope */}
-                          <span style={{
-                            fontSize: '0.72rem',
-                            padding: '2px 6px',
-                            borderRadius: '4px',
-                            fontWeight: 700,
-                            background: 'rgba(255, 255, 255, 0.06)',
-                            color: perms.can_view_all_contracts ? '#e2e8f0' : '#a5b4fc'
-                          }}>
-                            {perms.can_view_all_contracts ? '🌐 كل العقود' : '👤 عقوده فقط'}
-                          </span>
-
-                        </div>
-
-                        {/* Edit Permissions Button */}
+                        {/* Dropdown Trigger Button */}
                         <button
-                          onClick={() => handleOpenPermsModal(staff)}
+                          onClick={() => setOpenDropdownStaffId(isDropdownOpen ? null : staff.id)}
                           style={{
-                            background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.2), rgba(217, 119, 6, 0.2))',
-                            border: '1px solid rgba(245, 158, 11, 0.4)',
-                            color: '#fbbf24',
-                            borderRadius: '6px',
-                            padding: '4px 10px',
-                            fontSize: '0.76rem',
-                            fontWeight: 800,
+                            background: isDropdownOpen ? 'rgba(245, 158, 11, 0.25)' : 'rgba(15, 23, 42, 0.8)',
+                            border: `1px solid ${isDropdownOpen ? '#fbbf24' : 'rgba(255, 255, 255, 0.15)'}`,
+                            color: isDropdownOpen ? '#fbbf24' : '#e2e8f0',
+                            borderRadius: '8px',
+                            padding: '6px 12px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
                             cursor: 'pointer',
                             display: 'inline-flex',
                             alignItems: 'center',
-                            gap: '4px'
+                            gap: '8px',
+                            transition: 'all 0.2s ease'
                           }}
                         >
-                          <Key size={12} />
-                          <span>تعديل الصلاحيات</span>
+                          <Key size={14} color="#fbbf24" />
+                          <span>قائمة الصلاحيات ({activePermsCount} مفعلة)</span>
+                          <span style={{
+                            fontSize: '0.68rem',
+                            padding: '1px 5px',
+                            borderRadius: '4px',
+                            background: perms.can_view_financials ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)',
+                            color: perms.can_view_financials ? '#34d399' : '#f87171'
+                          }}>
+                            {perms.can_view_financials ? '💰 المبالغ ظاهرة' : '🔒 المبالغ محجوبة'}
+                          </span>
+                          {isDropdownOpen ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </button>
+
+                        {/* Interactive Dropdown Checklist Box */}
+                        {isDropdownOpen && (
+                          <div style={{
+                            position: 'absolute',
+                            top: '100%',
+                            right: 0,
+                            marginTop: '8px',
+                            width: '320px',
+                            background: '#0f172a',
+                            border: '1px solid rgba(245, 158, 11, 0.4)',
+                            borderRadius: '12px',
+                            padding: '14px',
+                            zIndex: 100,
+                            boxShadow: '0 10px 30px rgba(0, 0, 0, 0.6)',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '8px'
+                          }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '6px' }}>
+                              <span style={{ fontSize: '0.8rem', fontWeight: 800, color: '#fbbf24' }}>
+                                تبديل الصلاحيات المباشر ⚡
+                              </span>
+                              <button
+                                onClick={() => setOpenDropdownStaffId(null)}
+                                style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '2px' }}
+                              >
+                                <X size={14} />
+                              </button>
+                            </div>
+
+                            {/* Option 1: Financials */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px', background: perms.can_view_financials ? 'rgba(16, 185, 129, 0.1)' : 'transparent' }}>
+                              <span>💰 رؤية المبالغ والأسعار</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_view_financials}
+                                onChange={() => handleTogglePermission(staff, 'can_view_financials')}
+                                style={{ accentColor: '#10b981' }}
+                              />
+                            </label>
+
+                            {/* Option 2: View All Contracts */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>🌐 رؤية كافة العقود</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_view_all_contracts}
+                                onChange={() => handleTogglePermission(staff, 'can_view_all_contracts')}
+                                style={{ accentColor: '#38bdf8' }}
+                              />
+                            </label>
+
+                            {/* Option 3: Create Contracts */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>📝 إنشاء وتوثيق عقود</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_create_contracts}
+                                onChange={() => handleTogglePermission(staff, 'can_create_contracts')}
+                                style={{ accentColor: '#fbbf24' }}
+                              />
+                            </label>
+
+                            {/* Option 4: Extend Contracts */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>🔄 تمديد وتأجيل السحب</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_extend_contracts}
+                                onChange={() => handleTogglePermission(staff, 'can_extend_contracts')}
+                                style={{ accentColor: '#38bdf8' }}
+                              />
+                            </label>
+
+                            {/* Option 5: Collect Cash */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>💵 تحصيل كاش وسند قبض</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_collect_payments}
+                                onChange={() => handleTogglePermission(staff, 'can_collect_payments')}
+                                style={{ accentColor: '#10b981' }}
+                              />
+                            </label>
+
+                            {/* Option 6: Send Sadad Links */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>💳 إرسال روابط سداد</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_send_payment_links}
+                                onChange={() => handleTogglePermission(staff, 'can_send_payment_links')}
+                                style={{ accentColor: '#fbbf24' }}
+                              />
+                            </label>
+
+                            {/* Option 7: Return to Stock */}
+                            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer', padding: '4px 6px', borderRadius: '6px' }}>
+                              <span>📦 سحب واستلام للمخزون</span>
+                              <input
+                                type="checkbox"
+                                checked={perms.can_manage_inventory}
+                                onChange={() => handleTogglePermission(staff, 'can_manage_inventory')}
+                                style={{ accentColor: '#10b981' }}
+                              />
+                            </label>
+
+                          </div>
+                        )}
 
                       </div>
                     )}
@@ -376,321 +445,18 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
         </table>
       </div>
 
-      {/* Permissions Configuration Modal */}
-      {selectedStaffForPerms && (
-        <div className="modal-backdrop" onClick={() => setSelectedStaffForPerms(null)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '640px', padding: '28px' }}>
-            
-            {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
-              <div>
-                <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Key size={22} color="#fbbf24" />
-                  <span>ضبط صلاحيات: {selectedStaffForPerms.full_name}</span>
-                </h3>
-                <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '2px' }}>
-                  حدد بدقة ما يحق للموظف رؤيته أو تعديله أو تنفيذه في النظام
-                </p>
-              </div>
-
-              <button
-                onClick={() => setSelectedStaffForPerms(null)}
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  background: 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  color: '#94a3b8',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-
-            {/* Quick Presets */}
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.7)',
-              padding: '12px 14px',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              marginBottom: '18px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: '8px'
-            }}>
-              <span style={{ fontSize: '0.82rem', color: '#fbbf24', fontWeight: 700 }}>
-                ⚡ قوالب جاهزة سريعة:
-              </span>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <button
-                  type="button"
-                  onClick={() => setTempPermissions(DEFAULT_DRIVER_PERMISSIONS)}
-                  style={{
-                    background: 'rgba(16, 185, 129, 0.15)',
-                    border: '1px solid rgba(16, 185, 129, 0.3)',
-                    color: '#34d399',
-                    borderRadius: '6px',
-                    padding: '4px 10px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  🚛 قالب السائق الميداني
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTempPermissions(DEFAULT_STAFF_PERMISSIONS)}
-                  style={{
-                    background: 'rgba(56, 189, 248, 0.15)',
-                    border: '1px solid rgba(56, 189, 248, 0.3)',
-                    color: '#38bdf8',
-                    borderRadius: '6px',
-                    padding: '4px 10px',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer'
-                  }}
-                >
-                  👷 قالب موظف الاستقبال
-                </button>
-              </div>
-            </div>
-
-            <form onSubmit={handleSavePermsSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-              
-              {/* 1. View Financials */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: tempPermissions.can_view_financials ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.08)',
-                border: `1px solid ${tempPermissions.can_view_financials ? 'rgba(16, 185, 129, 0.3)' : 'rgba(239, 68, 68, 0.2)'}`,
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_view_financials}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_view_financials: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#10b981' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: tempPermissions.can_view_financials ? '#34d399' : '#f87171' }}>
-                    💰 رؤية المبالغ المالية والأسعار وإجمالي العقود (Financials Visibility)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    {tempPermissions.can_view_financials ? 'الموظف يرى إجمالي المبالغ والمدفوع والمتبقي في كل الشاشات.' : '🔒 يتم حجب المبالغ المالية من الموظف وتظهر مشفرة [*** ر.س] لحماية الخصوصية المالية.'}
-                  </div>
-                </div>
-              </label>
-
-              {/* 2. View All Contracts vs Assigned */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_view_all_contracts}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_view_all_contracts: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#38bdf8' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    🌐 رؤية كافة العقود في النظام (View All Contracts)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    {tempPermissions.can_view_all_contracts ? 'يرى جميع عقود الشركة لكافة السائقين.' : '👤 يرى فقط العقود المسندة إليه شخصياً.'}
-                  </div>
-                </div>
-              </label>
-
-              {/* 3. Create Contracts */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_create_contracts}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_create_contracts: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#fbbf24' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    📝 إنشاء وتوثيق عقود جديدة (Create New Contracts)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    إمكانية حجز وتأجير الحاويات المتاحة وتوثيق العقد.
-                  </div>
-                </div>
-              </label>
-
-              {/* 4. Extend Contracts */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_extend_contracts}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_extend_contracts: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#38bdf8' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    🔄 تمديد وتجديد العقود (Extend & Renew Contracts)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    تأجيل موعد سحب الحاوية وإضافة أيام إضافية وتحديث العقد.
-                  </div>
-                </div>
-              </label>
-
-              {/* 5. Collect Payments & Issue Receipt */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_collect_payments}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_collect_payments: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#10b981' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    💵 تحصيل الكاش الميداني وإصدار سندات القبض (Cash Collection)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    استلام المبالغ نقداً في الموقع وطباعة/إرسال سند القبض المعتمد.
-                  </div>
-                </div>
-              </label>
-
-              {/* 6. Send Sadad Links */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_send_payment_links}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_send_payment_links: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#fbbf24' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    💳 إرسال روابط سداد الإلكترونية (Send Payment Links)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    توليد وإرسال روابط فواتير مدى وأبل باي عبر محرك الواتساب.
-                  </div>
-                </div>
-              </label>
-
-              {/* 7. Manage Inventory / Return to stock */}
-              <label style={{
-                display: 'flex',
-                alignItems: 'flex-start',
-                gap: '12px',
-                padding: '12px 14px',
-                borderRadius: '10px',
-                background: 'rgba(15, 23, 42, 0.6)',
-                border: '1px solid rgba(255, 255, 255, 0.1)',
-                cursor: 'pointer'
-              }}>
-                <input
-                  type="checkbox"
-                  checked={tempPermissions.can_manage_inventory}
-                  onChange={(e) => setTempPermissions(p => ({ ...p, can_manage_inventory: e.target.checked }))}
-                  style={{ width: '18px', height: '18px', marginTop: '2px', accentColor: '#10b981' }}
-                />
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: '0.9rem', fontWeight: 800, color: '#ffffff' }}>
-                    📦 سحب واستلام الحاويات للمخزون (Return to Stock)
-                  </div>
-                  <div style={{ fontSize: '0.78rem', color: '#94a3b8', marginTop: '2px' }}>
-                    إنهاء العقد وسحب الحاوية وإرجاعها فوراً لقائمة المتاح 🟢.
-                  </div>
-                </div>
-              </label>
-
-              {/* Action Buttons */}
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
-                <button
-                  type="button"
-                  className="btn-secondary"
-                  onClick={() => setSelectedStaffForPerms(null)}
-                >
-                  إلغاء
-                </button>
-                <button
-                  type="submit"
-                  className="btn-primary"
-                  disabled={isSavingPerms}
-                  style={{ minWidth: '160px' }}
-                >
-                  {isSavingPerms ? 'جارٍ الحفظ...' : 'حفظ الصلاحيات'}
-                </button>
-              </div>
-
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Add Staff Modal */}
+      {/* Add Staff Modal (With Permissions Dropdown ONLY for Staff, Hidden for Driver) */}
       {isAddModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsAddModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '520px', padding: '28px' }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '540px', padding: '28px' }}>
             
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '18px' }}>
               <div>
                 <h3 style={{ fontSize: '1.3rem', fontWeight: '800', color: '#ffffff' }}>
-                  إضافة سائق أو موظف جديد
+                  إضافة مستخدم جديد
                 </h3>
                 <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '2px' }}>
-                  تسجيل حساب جديد وتعيين الصلاحيات الافتراضية
+                  {jobRole === 'driver' ? 'تسجيل سائق ميداني وتعيين صلاحيات الرافعة والتوصيل تلقائياً' : 'تسجيل موظف استقبال وضبط صلاحياته عبر القائمة المنسدلة'}
                 </p>
               </div>
 
@@ -736,6 +502,9 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                     <div style={{ fontSize: '0.88rem', fontWeight: 800, color: jobRole === 'driver' ? '#34d399' : '#ffffff' }}>
                       سائق رافعة وتوصيل 🚛
                     </div>
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                      (صلاحيات ميدانية تلقائية)
+                    </div>
                   </div>
 
                   <div
@@ -753,6 +522,9 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                     <div style={{ fontSize: '0.88rem', fontWeight: 800, color: jobRole === 'staff' ? '#38bdf8' : '#ffffff' }}>
                       موظف استقبال ومتابعة 👷
                     </div>
+                    <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                      (صلاحيات قابلة للتخصيص)
+                    </div>
                   </div>
                 </div>
               </div>
@@ -760,12 +532,12 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
               {/* Full Name */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '4px', color: '#e2e8f0' }}>
-                  اسم الموظف / السائق:
+                  اسم المستخدم:
                 </label>
                 <input
                   type="text"
                   className="form-input"
-                  placeholder="مثال: محمد العمري"
+                  placeholder={jobRole === 'driver' ? 'مثال: سعد الدوسري' : 'مثال: محمد الشمري'}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                   required
@@ -775,7 +547,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
               {/* Phone */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '4px', color: '#10b981' }}>
-                  رقم جوال الواتساب (مباشر للميدان):
+                  رقم جوال الواتساب:
                 </label>
                 <input
                   type="tel"
@@ -791,18 +563,141 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
               {/* Email */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.82rem', fontWeight: '700', marginBottom: '4px', color: '#e2e8f0' }}>
-                  البريد الإلكتروني (لتسجيل الدخول):
+                  البريد الإلكتروني:
                 </label>
                 <input
                   type="email"
                   className="form-input"
                   dir="ltr"
-                  placeholder="driver@almuhtaraz.com"
+                  placeholder={jobRole === 'driver' ? 'driver@almuhtaraz.com' : 'staff@almuhtaraz.com'}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
                 />
               </div>
+
+              {/* 🛡️ Permissions Dropdown (ONLY shown when jobRole === 'staff', HIDDEN for driver) */}
+              {jobRole === 'staff' && (
+                <div style={{
+                  background: 'rgba(15, 23, 42, 0.7)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
+                  borderRadius: '10px',
+                  padding: '12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '10px'
+                }}>
+                  {/* Dropdown Header Trigger */}
+                  <div
+                    onClick={() => setIsPermissionsDropdownOpenInAdd(!isPermissionsDropdownOpenInAdd)}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Key size={16} color="#38bdf8" />
+                      <span style={{ fontSize: '0.88rem', fontWeight: 800, color: '#38bdf8' }}>
+                        قائمة صلاحيات موظف الاستقبال (تخصيص الصلاحيات) ▾
+                      </span>
+                    </div>
+                    {isPermissionsDropdownOpenInAdd ? <ChevronUp size={16} color="#38bdf8" /> : <ChevronDown size={16} color="#38bdf8" />}
+                  </div>
+
+                  {/* Dropdown Content */}
+                  {isPermissionsDropdownOpenInAdd && (
+                    <div style={{
+                      display: 'grid',
+                      gridTemplateColumns: '1fr 1fr',
+                      gap: '8px',
+                      paddingTop: '8px',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+                    }}>
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_view_financials}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_view_financials: e.target.checked }))}
+                          style={{ accentColor: '#10b981' }}
+                        />
+                        <span>💰 رؤية المبالغ المالية</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_view_all_contracts}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_view_all_contracts: e.target.checked }))}
+                          style={{ accentColor: '#38bdf8' }}
+                        />
+                        <span>🌐 رؤية كافة العقود</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_create_contracts}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_create_contracts: e.target.checked }))}
+                          style={{ accentColor: '#fbbf24' }}
+                        />
+                        <span>📝 إنشاء وتوثيق عقود</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_extend_contracts}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_extend_contracts: e.target.checked }))}
+                          style={{ accentColor: '#38bdf8' }}
+                        />
+                        <span>🔄 تمديد وتأجيل السحب</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_collect_payments}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_collect_payments: e.target.checked }))}
+                          style={{ accentColor: '#10b981' }}
+                        />
+                        <span>💵 تحصيل كاش وسند قبض</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_send_payment_links}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_send_payment_links: e.target.checked }))}
+                          style={{ accentColor: '#fbbf24' }}
+                        />
+                        <span>💳 إرسال روابط سداد</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_manage_inventory}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_manage_inventory: e.target.checked }))}
+                          style={{ accentColor: '#10b981' }}
+                        />
+                        <span>📦 استلام للمخزون</span>
+                      </label>
+
+                      <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.8rem', color: '#ffffff', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={newStaffPermissions.can_send_whatsapp}
+                          onChange={(e) => setNewStaffPermissions(p => ({ ...p, can_send_whatsapp: e.target.checked }))}
+                          style={{ accentColor: '#10b981' }}
+                        />
+                        <span>📱 مراسلة بالواتساب</span>
+                      </label>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Actions */}
               <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '6px' }}>
@@ -818,7 +713,7 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                   className="btn-primary"
                   disabled={isSubmitting}
                 >
-                  {isSubmitting ? 'جارٍ الإضافة...' : 'حفظ وإضافة الموظف'}
+                  {isSubmitting ? 'جارٍ الإضافة...' : 'حفظ وإضافة المستخدم'}
                 </button>
               </div>
 
