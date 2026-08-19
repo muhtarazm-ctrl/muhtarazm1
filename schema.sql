@@ -1,7 +1,6 @@
 -- ==============================================================================
 -- مشروع: نظام إدارة وتأجير الحاويات - "المخترز للحاويات"
--- ملف قاعدة البيانات وسياسات الأمان المعدل (Supabase Schema with RLS)
--- التحديث: نوعان فقط للحاويات (تجاري / أنقاض) + نظام الصلاحيات المطور + محرك جدولة إشعارات الواتساب
+-- ملف قاعدة البيانات وسياسات الأمان المعدل (Supabase Schema with Safe Idempotent RLS)
 -- ==============================================================================
 
 -- تفعيل إضافات PostgreSQL الأساسية
@@ -249,21 +248,18 @@ DECLARE
     v_emp_name TEXT;
     v_admin_phone TEXT;
 BEGIN
-    -- جلب بيانات العميل
     SELECT name, phone INTO v_customer_name, v_customer_phone 
     FROM public.customers WHERE id = NEW.customer_id;
     
-    -- جلب رقم الحاوية
     SELECT container_number INTO v_container_num 
     FROM public.containers WHERE id = NEW.container_id;
 
-    -- جلب بيانات الموظف
     IF NEW.assigned_employee_id IS NOT NULL THEN
         SELECT full_name, phone INTO v_emp_name, v_emp_phone 
         FROM public.profiles WHERE id = NEW.assigned_employee_id;
     END IF;
 
-    -- 1. إشعار توثيق العقد المباشر للعميل
+    -- إشعار توثيق العقد
     IF v_customer_phone IS NOT NULL THEN
         INSERT INTO public.notification_logs (
             contract_id, customer_id, recipient_role, recipient_phone, recipient_name,
@@ -276,13 +272,12 @@ BEGIN
         );
     END IF;
 
-    -- 2. في حالة عقود الأنقاض (اليومية): جدولة تنبيه قبل موعد السحب بـ 4 ساعات
+    -- عقود الأنقاض (تنبيه قبل 4 ساعات)
     IF NEW.contract_type = 'debris' THEN
         DECLARE
             v_pickup_time TIMESTAMPTZ := COALESCE(NEW.expected_pickup_time, NEW.end_date);
             v_remind_time TIMESTAMPTZ := v_pickup_time - INTERVAL '4 hours';
         BEGIN
-            -- تذكير العميل
             IF v_customer_phone IS NOT NULL AND v_remind_time > NOW() THEN
                 INSERT INTO public.notification_logs (
                     contract_id, customer_id, recipient_role, recipient_phone, recipient_name,
@@ -295,7 +290,6 @@ BEGIN
                 );
             END IF;
 
-            -- تنبيه الموظف التشغيلي
             IF v_emp_phone IS NOT NULL AND v_remind_time > NOW() THEN
                 INSERT INTO public.notification_logs (
                     contract_id, customer_id, recipient_role, recipient_phone, recipient_name,
@@ -309,13 +303,12 @@ BEGIN
             END IF;
         END;
 
-    -- 3. في حالة العقود التجارية (شهري / نصف سنوي / سنوي)
+    -- العقود التجارية (قبل 7 أيام وقبل يومين)
     ELSIF NEW.contract_type = 'commercial' THEN
         DECLARE
             v_7d_time TIMESTAMPTZ := NEW.end_date - INTERVAL '7 days';
             v_2d_time TIMESTAMPTZ := NEW.end_date - INTERVAL '2 days';
         BEGIN
-            -- إشعار قبل 7 أيام للعميل
             IF v_customer_phone IS NOT NULL AND v_7d_time > NOW() THEN
                 INSERT INTO public.notification_logs (
                     contract_id, customer_id, recipient_role, recipient_phone, recipient_name,
@@ -328,7 +321,6 @@ BEGIN
                 );
             END IF;
 
-            -- إشعار قبل يومين للعميل والموظف لتأكيد التجديد
             IF v_customer_phone IS NOT NULL AND v_2d_time > NOW() THEN
                 INSERT INTO public.notification_logs (
                     contract_id, customer_id, recipient_role, recipient_phone, recipient_name,
@@ -412,6 +404,7 @@ CREATE TRIGGER tr_inapp_notif_contract
 
 -- ==============================================================================
 -- 11. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
+-- تم استخدام DROP POLICY IF EXISTS قبل كل سياسة لضمان قابلية إعادة التنفيذ دون أخطاء
 -- ==============================================================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -446,15 +439,18 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ------------------------------------------------------------------------------
 -- سياسات جدول profiles (المستخدمون والموظفون)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Admins full control on profiles" ON public.profiles;
 CREATE POLICY "Admins full control on profiles"
     ON public.profiles FOR ALL
     USING (public.is_admin())
     WITH CHECK (public.is_admin());
 
+DROP POLICY IF EXISTS "Staff can view profiles" ON public.profiles;
 CREATE POLICY "Staff can view profiles"
     ON public.profiles FOR SELECT
     USING (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can update own profile" ON public.profiles;
 CREATE POLICY "Staff can update own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id AND public.is_active_staff())
@@ -463,19 +459,23 @@ CREATE POLICY "Staff can update own profile"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول containers (الحاويات)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view containers" ON public.containers;
 CREATE POLICY "Staff can view containers"
     ON public.containers FOR SELECT
     USING (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can insert containers" ON public.containers;
 CREATE POLICY "Staff can insert containers"
     ON public.containers FOR INSERT
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can update containers" ON public.containers;
 CREATE POLICY "Staff can update containers"
     ON public.containers FOR UPDATE
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Admins only can delete containers" ON public.containers;
 CREATE POLICY "Admins only can delete containers"
     ON public.containers FOR DELETE
     USING (public.is_admin());
@@ -483,19 +483,23 @@ CREATE POLICY "Admins only can delete containers"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول customers (العملاء)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view customers" ON public.customers;
 CREATE POLICY "Staff can view customers"
     ON public.customers FOR SELECT
     USING (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can insert customers" ON public.customers;
 CREATE POLICY "Staff can insert customers"
     ON public.customers FOR INSERT
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can update customers" ON public.customers;
 CREATE POLICY "Staff can update customers"
     ON public.customers FOR UPDATE
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Admins only can delete customers" ON public.customers;
 CREATE POLICY "Admins only can delete customers"
     ON public.customers FOR DELETE
     USING (public.is_admin());
@@ -503,6 +507,7 @@ CREATE POLICY "Admins only can delete customers"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول contracts (العقود)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view contracts" ON public.contracts;
 CREATE POLICY "Staff can view contracts"
     ON public.contracts FOR SELECT
     USING (
@@ -515,15 +520,18 @@ CREATE POLICY "Staff can view contracts"
         )
     );
 
+DROP POLICY IF EXISTS "Staff can insert contracts" ON public.contracts;
 CREATE POLICY "Staff can insert contracts"
     ON public.contracts FOR INSERT
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can update contracts" ON public.contracts;
 CREATE POLICY "Staff can update contracts"
     ON public.contracts FOR UPDATE
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Admins only can delete contracts" ON public.contracts;
 CREATE POLICY "Admins only can delete contracts"
     ON public.contracts FOR DELETE
     USING (public.is_admin());
@@ -531,19 +539,23 @@ CREATE POLICY "Admins only can delete contracts"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول notification_logs (سجل تنبيهات الواتساب)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view notifications logs" ON public.notification_logs;
 CREATE POLICY "Staff can view notifications logs"
     ON public.notification_logs FOR SELECT
     USING (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can insert and update notifications logs" ON public.notification_logs;
 CREATE POLICY "Staff can insert and update notifications logs"
     ON public.notification_logs FOR INSERT
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Staff can update notifications logs status" ON public.notification_logs;
 CREATE POLICY "Staff can update notifications logs status"
     ON public.notification_logs FOR UPDATE
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Admins only can delete notifications logs" ON public.notification_logs;
 CREATE POLICY "Admins only can delete notifications logs"
     ON public.notification_logs FOR DELETE
     USING (public.is_admin());
@@ -551,6 +563,7 @@ CREATE POLICY "Admins only can delete notifications logs"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول notifications (الإشعارات الداخلية In-App)
 -- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view in-app notifications" ON public.notifications;
 CREATE POLICY "Staff can view in-app notifications"
     ON public.notifications FOR SELECT
     USING (
@@ -558,6 +571,7 @@ CREATE POLICY "Staff can view in-app notifications"
         (public.is_active_staff() AND (user_id IS NULL OR user_id = auth.uid()))
     );
 
+DROP POLICY IF EXISTS "Staff can update read status on in-app notifications" ON public.notifications;
 CREATE POLICY "Staff can update read status on in-app notifications"
     ON public.notifications FOR UPDATE
     USING (
@@ -569,10 +583,12 @@ CREATE POLICY "Staff can update read status on in-app notifications"
         (public.is_active_staff() AND (user_id IS NULL OR user_id = auth.uid()))
     );
 
+DROP POLICY IF EXISTS "Staff can insert in-app notifications" ON public.notifications;
 CREATE POLICY "Staff can insert in-app notifications"
     ON public.notifications FOR INSERT
     WITH CHECK (public.is_active_staff());
 
+DROP POLICY IF EXISTS "Admins only can delete in-app notifications" ON public.notifications;
 CREATE POLICY "Admins only can delete in-app notifications"
     ON public.notifications FOR DELETE
     USING (public.is_admin());
@@ -594,5 +610,5 @@ INSERT INTO public.notifications (title, message, type, is_read)
 VALUES 
     ('⚠️ تنبيه موعد سحب وشيك (خلال 4 ساعات)', 'حاوية الأنقاض رقم (D-202) بالملقا تستحق السحب اليوم الساعة 4:00 عصراً.', 'contract_expiry_soon', false),
     ('📅 تنبيه تجديد عقد تجاري (قبل 5 أيام)', 'عقد الحاوية التجارية (CTR-2026-001) لمؤسسة صروح البناء شارف على الانتهاء.', 'contract_expiry_soon', false),
-    ('✨ جاهزية النظام', 'تم ربط وتشغيل محرك الإشعارات الداخلية وأنظمة المتابعة اللحظية بنجاح.', 'system_alert', true);
-
+    ('✨ جاهزية النظام', 'تم ربط وتشغيل محرك الإشعارات الداخلية وأنظمة المتابعة اللحظية بنجاح.', 'system_alert', true)
+ON CONFLICT DO NOTHING;
