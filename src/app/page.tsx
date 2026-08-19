@@ -16,7 +16,8 @@ import {
   WhatsAppSettings as IWhatsAppSettings,
   PaymentSettings as IPaymentSettings,
   Receipt,
-  PaymentMethod
+  PaymentMethod,
+  PaymentStatus
 } from '@/types/database';
 import { SplashIntro } from '@/components/SplashIntro';
 import { Navbar } from '@/components/Navbar';
