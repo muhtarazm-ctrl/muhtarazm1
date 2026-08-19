@@ -25,6 +25,9 @@ interface SmartSearchProps {
   onOpenNewContractWithContainer?: (containerId: string) => void;
   onViewContract?: (contract: Contract) => void;
   onSendWhatsApp?: (phone: string, message: string) => void;
+  onOpenReceipt?: (contract: Contract) => void;
+  onConfirmCashPayment?: (contract: Contract) => Promise<void>;
+  onSendSadadLink?: (contract: Contract) => Promise<void>;
 }
 
 export const SmartSearch: React.FC<SmartSearchProps> = ({
@@ -437,6 +440,22 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                     </a>
                   )}
 
+                  {/* Responsible Driver */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    fontSize: '0.8rem',
+                    color: '#34d399',
+                    background: 'rgba(16, 185, 129, 0.08)',
+                    padding: '4px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid rgba(16, 185, 129, 0.2)'
+                  }}>
+                    <Truck size={13} />
+                    <span>المسؤول الميداني: <strong>{contract.assigned_employee?.full_name || 'سعد الدوسري (سائق 🚛)'}</strong></span>
+                  </div>
+
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -446,21 +465,44 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                   }}>
                     <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
                       التكلفة: <strong style={{ color: '#ffffff' }}>{contract.total_cost} ر.س</strong>
+                      {' '}| المتبقي: <strong style={{ color: (contract.total_cost - contract.paid_amount) > 0 ? '#f87171' : '#34d399' }}>{(contract.total_cost - contract.paid_amount)} ر.س</strong>
                     </span>
 
-                    {contract.customer?.phone && onSendWhatsApp && (
-                      <button
-                        className="btn-emerald"
-                        style={{ padding: '6px 12px', fontSize: '0.8rem' }}
-                        onClick={() => onSendWhatsApp(
-                          contract.customer!.phone,
-                          `مرحباً ${contract.customer?.name}، بخصوص عقد الحاوية رقم (${contract.contract_number}) من المحترز للحاويات.`
-                        )}
-                      >
-                        <MessageCircle size={14} />
-                        <span>واتساب</span>
-                      </button>
-                    )}
+                    {/* Simple Payment Actions */}
+                    <div style={{ display: 'flex', gap: '6px' }}>
+                      {(contract.total_cost - contract.paid_amount) <= 0 || contract.payment_status === 'paid' ? (
+                        onOpenReceipt && (
+                          <button
+                            className="btn-emerald"
+                            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
+                            onClick={() => onOpenReceipt(contract)}
+                          >
+                            <span>📄 سند القبض</span>
+                          </button>
+                        )
+                      ) : (
+                        <>
+                          {onConfirmCashPayment && (
+                            <button
+                              className="btn-emerald"
+                              style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 800 }}
+                              onClick={() => onConfirmCashPayment(contract)}
+                            >
+                              <span>💵 كاش</span>
+                            </button>
+                          )}
+                          {onSendSadadLink && (
+                            <button
+                              className="btn-primary"
+                              style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 800 }}
+                              onClick={() => onSendSadadLink(contract)}
+                            >
+                              <span>💳 سداد</span>
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
               ))}

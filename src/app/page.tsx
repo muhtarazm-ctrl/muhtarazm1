@@ -29,9 +29,66 @@ import { WhatsAppSettings } from '@/components/WhatsAppSettings';
 import { PaymentSettings } from '@/components/PaymentSettings';
 import { NewContractModal } from '@/components/NewContractModal';
 import { ReceiptModal } from '@/components/ReceiptModal';
-import { ManualPaymentModal } from '@/components/ManualPaymentModal';
 
 // Sample Seed Data
+const initialStaff: Profile[] = [
+  {
+    id: 'staff-admin',
+    full_name: 'سعود المحترز (المدير العام)',
+    email: 'admin@almuhtaraz.com',
+    phone: '+966500000001',
+    role: 'admin',
+    is_active: true,
+    can_view_all_records: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'staff-3',
+    full_name: 'سعد الدوسري (سائق رافعة وتوصيل)',
+    email: 's.dosari@almuhtaraz.com',
+    phone: '+966550000004',
+    role: 'employee',
+    is_active: true,
+    can_view_all_records: false,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'staff-1',
+    full_name: 'محمد الشمري (موظف متابعة وتوثيق)',
+    email: 'm.shammari@almuhtaraz.com',
+    phone: '+966550000002',
+    role: 'employee',
+    is_active: true,
+    can_view_all_records: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'staff-2',
+    full_name: 'فهد القحطاني (سائق رافعة وتوصيل)',
+    email: 'f.qahtani@almuhtaraz.com',
+    phone: '+966550000003',
+    role: 'employee',
+    is_active: true,
+    can_view_all_records: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'staff-4',
+    full_name: 'عبدالله المطيري (موظف استقبال)',
+    email: 'a.mutairi@almuhtaraz.com',
+    phone: '+966550000005',
+    role: 'employee',
+    is_active: true,
+    can_view_all_records: true,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+
 const initialContainers: Container[] = [
   { id: '1', container_number: 'C-101', type: 'commercial', status: 'available', daily_rate: 0, monthly_rate: 3500, notes: 'حاوية تجارية مغلقة للمستودعات والشركات', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   { id: '2', container_number: 'C-102', type: 'commercial', status: 'rented', daily_rate: 0, monthly_rate: 3500, notes: 'مؤجرة لدى مجمع تجاري بالرياض', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
@@ -67,6 +124,8 @@ const initialContracts: Contract[] = [
     payment_status: 'paid',
     payment_method: 'mada',
     receipt_number: 'RCP-2026-1049',
+    assigned_employee_id: 'staff-3',
+    assigned_employee: initialStaff[1],
     status: 'active',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -93,6 +152,8 @@ const initialContracts: Contract[] = [
     remaining_amount: 300,
     payment_status: 'partially_paid',
     payment_method: 'cash',
+    assigned_employee_id: 'staff-3',
+    assigned_employee: initialStaff[1],
     status: 'active',
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -160,64 +221,6 @@ const initialInAppNotifications: InAppNotification[] = [
   }
 ];
 
-const initialStaff: Profile[] = [
-  {
-    id: 'staff-admin',
-    full_name: 'سعود المحترز (المدير العام)',
-    email: 'admin@almuhtaraz.com',
-    phone: '+966500000001',
-    role: 'admin',
-    is_active: true,
-    can_view_all_records: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'staff-1',
-    full_name: 'محمد الشمري',
-    email: 'm.shammari@almuhtaraz.com',
-    phone: '+966550000002',
-    role: 'employee',
-    is_active: true,
-    can_view_all_records: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'staff-2',
-    full_name: 'فهد القحطاني',
-    email: 'f.qahtani@almuhtaraz.com',
-    phone: '+966550000003',
-    role: 'employee',
-    is_active: true,
-    can_view_all_records: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'staff-3',
-    full_name: 'سعد الدوسري (سائق وتوصيل)',
-    email: 's.dosari@almuhtaraz.com',
-    phone: '+966550000004',
-    role: 'employee',
-    is_active: true,
-    can_view_all_records: false,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  },
-  {
-    id: 'staff-4',
-    full_name: 'عبدالله المطيري',
-    email: 'a.mutairi@almuhtaraz.com',
-    phone: '+966550000005',
-    role: 'employee',
-    is_active: true,
-    can_view_all_records: true,
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString()
-  }
-];
-
 const initialGatewaySettings: IWhatsAppSettings = {
   mode: 'evolution',
   evolution_server_url: 'http://localhost:8080',
@@ -261,9 +264,8 @@ export default function Home() {
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
   const [preSelectedContainerId, setPreSelectedContainerId] = useState<string | undefined>();
   
-  // Payment Modals State
+  // Payment Receipt Modal State
   const [selectedReceiptContract, setSelectedReceiptContract] = useState<Contract | null>(null);
-  const [selectedManualPaymentContract, setSelectedManualPaymentContract] = useState<Contract | null>(null);
 
   // Fetch initial data from Supabase if connected
   useEffect(() => {
@@ -275,7 +277,7 @@ export default function Home() {
         const { data: dbCustomers } = await supabase.from('customers').select('*');
         if (dbCustomers && dbCustomers.length > 0) setCustomers(dbCustomers);
 
-        const { data: dbContracts } = await supabase.from('contracts').select('*, customer:customers(*), container:containers(*)');
+        const { data: dbContracts } = await supabase.from('contracts').select('*, customer:customers(*), container:containers(*), assigned_employee:profiles(*)');
         if (dbContracts && dbContracts.length > 0) setContracts(dbContracts);
 
         const { data: dbNotifs } = await supabase.from('notification_logs').select('*');
@@ -381,89 +383,46 @@ export default function Home() {
     }
   };
 
-  // Send Electronic Invoice via WhatsApp Link
-  const handleSendInvoiceLink = async (contract: Contract) => {
-    try {
-      const res = await fetch('/api/payment/create-invoice', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contract_id: contract.id,
-          contract_number: contract.contract_number,
-          amount: contract.remaining_amount > 0 ? contract.remaining_amount : contract.total_cost,
-          customer_name: contract.customer?.name,
-          customer_phone: contract.customer?.phone
-        })
-      });
-
-      const data = await res.json();
-      if (data.success && contract.customer?.phone) {
-        handleSendWhatsApp(contract.customer.phone, data.whatsapp_message);
-      } else {
-        alert('حدث خطأ أثناء إنشاء رابط الفاتورة الإلكترونية.');
-      }
-    } catch (err) {
-      // Fallback
-      if (contract.customer?.phone) {
-        const fallbackLink = `https://checkout.moyasar.com/invoices/inv_${contract.contract_number}`;
-        handleSendWhatsApp(
-          contract.customer.phone,
-          `مرحباً ${contract.customer.name}، رابط سداد عقد الحاوية (${contract.contract_number}) بمبلغ (${contract.remaining_amount || contract.total_cost} ر.س) عبر Apple Pay ومدى:\n${fallbackLink}`
-        );
-      }
-    }
-  };
-
-  // Confirm Manual Payment (Cash / POS / Transfer)
-  const handleConfirmManualPayment = async (
-    contractId: string, 
-    amount: number, 
-    method: PaymentMethod, 
-    notes?: string
-  ): Promise<boolean> => {
-    const target = contracts.find(c => c.id === contractId);
-    if (!target) return false;
-
-    const newPaidAmount = target.paid_amount + amount;
-    const newRemaining = Math.max(0, target.total_cost - newPaidAmount);
-    const newPaymentStatus = newRemaining <= 0 ? 'paid' : 'partially_paid';
+  // 1. [💵 كاش] - Quick Cash Payment (One-click Confirm & Open Receipt)
+  const handleConfirmCashPayment = async (contract: Contract) => {
+    const remaining = Number(contract.remaining_amount ?? (contract.total_cost - contract.paid_amount));
     const receiptNumber = `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const updatedContract: Contract = {
-      ...target,
-      paid_amount: newPaidAmount,
-      remaining_amount: newRemaining,
-      payment_status: newPaymentStatus,
-      payment_method: method,
+      ...contract,
+      paid_amount: contract.total_cost,
+      remaining_amount: 0,
+      payment_status: 'paid',
+      payment_method: 'cash',
       receipt_number: receiptNumber
     };
 
     // Update state
-    setContracts(prev => prev.map(c => c.id === contractId ? updatedContract : c));
+    setContracts(prev => prev.map(c => c.id === contract.id ? updatedContract : c));
 
     // Create receipt
     const newReceipt: Receipt = {
       id: `rcp-${Date.now()}`,
       receipt_number: receiptNumber,
-      contract_id: target.id,
-      customer_id: target.customer_id,
-      customer_name: target.customer?.name || 'العميل',
-      amount: amount,
-      payment_method: method,
-      contract_number: target.contract_number,
-      container_number: target.container?.container_number,
-      container_type: target.contract_type,
+      contract_id: contract.id,
+      customer_id: contract.customer_id,
+      customer_name: contract.customer?.name || 'العميل',
+      amount: remaining > 0 ? remaining : contract.total_cost,
+      payment_method: 'cash',
+      contract_number: contract.contract_number,
+      container_number: contract.container?.container_number,
+      container_type: contract.contract_type,
       issued_at: new Date().toISOString(),
-      notes: notes
+      notes: `تم الاستلام نقداً (كاش في الموقع)`
     };
     setReceipts(prev => [newReceipt, ...prev]);
 
     // In-app notification
     const inAppNotif: InAppNotification = {
       id: `inapp-${Date.now()}`,
-      contract_id: target.id,
-      title: `💵 تم استلام سداد (${amount} ر.س)`,
-      message: `تم توثيق سداد للعقد (${target.contract_number}) بطريقة (${method}) وسند قبض (${receiptNumber}).`,
+      contract_id: contract.id,
+      title: `💵 استلام كاش (${remaining} ر.س)`,
+      message: `تم سداد العقد (${contract.contract_number}) نقداً كاش وإصدار سند قبض (${receiptNumber}).`,
       type: 'payment_alert',
       is_read: false,
       created_at: new Date().toISOString()
@@ -480,18 +439,18 @@ export default function Home() {
     // Save to Supabase
     try {
       await supabase.from('contracts').update({
-        paid_amount: newPaidAmount,
-        payment_status: newPaymentStatus,
+        paid_amount: contract.total_cost,
+        payment_status: 'paid',
         receipt_number: receiptNumber
-      }).eq('id', contractId);
+      }).eq('id', contract.id);
 
       await supabase.from('receipts').insert([{
         receipt_number: receiptNumber,
-        contract_id: target.id,
-        customer_id: target.customer_id,
-        amount: amount,
-        payment_method: method,
-        notes: notes
+        contract_id: contract.id,
+        customer_id: contract.customer_id,
+        amount: remaining > 0 ? remaining : contract.total_cost,
+        payment_method: 'cash',
+        notes: `تم الاستلام نقداً (كاش في الموقع)`
       }]);
     } catch (e) {
       console.warn('Synced payment locally:', e);
@@ -499,7 +458,43 @@ export default function Home() {
 
     // Automatically open receipt modal to view / print
     setSelectedReceiptContract(updatedContract);
-    return true;
+  };
+
+  // 2. [💳 سداد] - Send Electronic Invoice link via WhatsApp
+  const handleSendSadadLink = async (contract: Contract) => {
+    const remaining = Number(contract.remaining_amount ?? (contract.total_cost - contract.paid_amount));
+    try {
+      const res = await fetch('/api/payment/create-invoice', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contract_id: contract.id,
+          contract_number: contract.contract_number,
+          amount: remaining > 0 ? remaining : contract.total_cost,
+          customer_name: contract.customer?.name,
+          customer_phone: contract.customer?.phone
+        })
+      });
+
+      const data = await res.json();
+      if (data.success && contract.customer?.phone) {
+        handleSendWhatsApp(contract.customer.phone, data.whatsapp_message);
+      } else {
+        const fallbackLink = `https://checkout.moyasar.com/invoices/inv_${contract.contract_number}`;
+        handleSendWhatsApp(
+          contract.customer!.phone,
+          `مرحباً ${contract.customer?.name}، رابط سداد عقد الحاوية (${contract.contract_number}) بمبلغ (${remaining || contract.total_cost} ر.س) عبر Apple Pay ومدى:\n${fallbackLink}`
+        );
+      }
+    } catch (err) {
+      if (contract.customer?.phone) {
+        const fallbackLink = `https://checkout.moyasar.com/invoices/inv_${contract.contract_number}`;
+        handleSendWhatsApp(
+          contract.customer.phone,
+          `مرحباً ${contract.customer?.name}، رابط سداد عقد الحاوية (${contract.contract_number}) بمبلغ (${remaining || contract.total_cost} ر.س) عبر Apple Pay ومدى:\n${fallbackLink}`
+        );
+      }
+    }
   };
 
   // Container Status Update Handler
@@ -601,6 +596,7 @@ export default function Home() {
     };
 
     const containerObj = containers.find(c => c.id === contractData.container_id);
+    const assignedStaff = staffList.find(s => s.id === contractData.assigned_employee_id) || staffList[1];
     const receiptNumber = `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
     const newContract: Contract = {
@@ -608,6 +604,8 @@ export default function Home() {
       contract_number: contractData.contract_number,
       customer_id: customerObj.id,
       container_id: contractData.container_id,
+      assigned_employee_id: contractData.assigned_employee_id,
+      assigned_employee: assignedStaff,
       contract_type: contractData.contract_type,
       period_type: contractData.period_type,
       duration_days: contractData.duration_days,
@@ -660,7 +658,7 @@ export default function Home() {
       id: `inapp-${Date.now()}`,
       contract_id: newContract.id,
       title: `📝 تم تسجيل عقد جديد (${newContract.contract_number})`,
-      message: `تم توثيق عقد جديد للعميل ${customerObj.name} بالحاوية (${containerObj?.container_number || '-'}).`,
+      message: `تم توثيق عقد جديد للعميل ${customerObj.name} بالحاوية (${containerObj?.container_number || '-'}). المسؤول: ${assignedStaff?.full_name || 'سائق'}.`,
       type: 'contract_created',
       is_read: false,
       created_at: new Date().toISOString()
@@ -705,6 +703,7 @@ export default function Home() {
           contract_number: newContract.contract_number,
           customer_id: createdCust.id,
           container_id: newContract.container_id,
+          assigned_employee_id: newContract.assigned_employee_id,
           contract_type: newContract.contract_type,
           period_type: newContract.period_type,
           duration_days: newContract.duration_days,
@@ -807,6 +806,9 @@ export default function Home() {
               setIsContractModalOpen(true);
             }}
             onSendWhatsApp={handleSendWhatsApp}
+            onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
+            onConfirmCashPayment={handleConfirmCashPayment}
+            onSendSadadLink={handleSendSadadLink}
           />
         )}
 
@@ -833,8 +835,8 @@ export default function Home() {
             onDeleteContract={handleDeleteContract}
             onSendWhatsApp={handleSendWhatsApp}
             onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
-            onOpenManualPayment={(contract) => setSelectedManualPaymentContract(contract)}
-            onSendInvoiceLink={handleSendInvoiceLink}
+            onConfirmCashPayment={handleConfirmCashPayment}
+            onSendSadadLink={handleSendSadadLink}
           />
         )}
 
@@ -880,6 +882,7 @@ export default function Home() {
         isOpen={isContractModalOpen}
         onClose={() => setIsContractModalOpen(false)}
         containers={containers}
+        staffList={staffList}
         preSelectedContainerId={preSelectedContainerId}
         onSaveContract={handleSaveContract}
       />
@@ -890,14 +893,6 @@ export default function Home() {
         onClose={() => setSelectedReceiptContract(null)}
         contract={selectedReceiptContract}
         onSendWhatsAppReceipt={handleSendWhatsApp}
-      />
-
-      {/* 6. Manual Payment Collection Modal (Cash / POS / Transfer) */}
-      <ManualPaymentModal
-        isOpen={!!selectedManualPaymentContract}
-        onClose={() => setSelectedManualPaymentContract(null)}
-        contract={selectedManualPaymentContract}
-        onConfirmPayment={handleConfirmManualPayment}
       />
 
       {/* Footer */}

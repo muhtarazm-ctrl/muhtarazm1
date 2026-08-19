@@ -6,21 +6,22 @@ import {
   UserPlus, 
   ShieldCheck, 
   UserCheck, 
-  Key, 
+  UserX, 
   Trash2, 
-  Eye, 
-  EyeOff, 
-  CheckCircle, 
-  XCircle,
-  X,
+  Key, 
+  CheckCircle2, 
+  AlertCircle,
+  Eye,
+  EyeOff,
   Phone,
-  Mail
+  Truck,
+  Briefcase
 } from 'lucide-react';
-import { Profile } from '@/types/database';
+import { Profile, UserRole } from '@/types/database';
 
 interface StaffManagementProps {
   staffList: Profile[];
-  onAddStaff: (staffData: Partial<Profile> & { password?: string }) => Promise<boolean>;
+  onAddStaff: (staffData: any) => Promise<boolean>;
   onToggleStatus: (profileId: string, currentActive: boolean) => Promise<void>;
   onToggleViewAll: (profileId: string, currentViewAll: boolean) => Promise<void>;
   onDeleteStaff: (profileId: string) => Promise<void>;
@@ -36,36 +37,37 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('+9665');
+  const [jobRole, setJobRole] = useState<'driver' | 'staff'>('driver');
   const [canViewAll, setCanViewAll] = useState(true);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const maxStaffLimit = 5;
+  const currentCount = staffList.length;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName || !email || !password) {
-      alert('يرجى تعبئة الاسم، البريد الإلكتروني، وكلمة المرور.');
+    if (currentCount >= maxStaffLimit) {
+      alert(`عذراً، تم الوصول للحد الأقصى لعدد الموظفين والسائقين المتاحين (${maxStaffLimit} مستخدمين).`);
       return;
     }
 
-    setIsSaving(true);
-    const ok = await onAddStaff({
-      full_name: fullName,
-      email: email,
-      phone: phone,
-      role: 'employee',
-      is_active: true,
-      can_view_all_records: canViewAll,
-      password: password
+    setIsSubmitting(true);
+    const roleTitle = jobRole === 'driver' ? '(سائق رافعة وتوصيل)' : '(موظف استقبال ومتابعة)';
+    const success = await onAddStaff({
+      full_name: `${fullName} ${roleTitle}`,
+      email,
+      phone,
+      can_view_all_records: canViewAll
     });
-    setIsSaving(false);
+    setIsSubmitting(false);
 
-    if (ok) {
+    if (success) {
       setIsAddModalOpen(false);
       setFullName('');
       setEmail('');
-      setPhone('');
-      setPassword('');
+      setPhone('+9665');
+      setJobRole('driver');
     }
   };
 
@@ -75,228 +77,273 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#a5b4fc', fontSize: '0.85rem', fontWeight: '700', marginBottom: '4px' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: '#10b981', fontSize: '0.85rem', fontWeight: '700', marginBottom: '4px' }}>
             <ShieldCheck size={16} />
-            <span>لوحة تحكم المدير الحصرية</span>
+            <span>خاص بالمدير العام</span>
           </div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-            إدارة الموظفين والصلاحيات (5 موظفين)
+            إدارة الموظفين والسائقين
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            إضافة حسابات الموظفين، تحديد كلمات السر، والتحكم في إمكانية رؤية كافة العقود
+            توزيع وتعيين السائقين وموظفي الاستقبال، أرقام الواتساب، وإدارة الصلاحيات (متاح {currentCount} من أصل {maxStaffLimit})
           </p>
         </div>
 
         <button
-          id="btn-open-add-staff"
           className="btn-primary"
           onClick={() => setIsAddModalOpen(true)}
+          disabled={currentCount >= maxStaffLimit}
+          style={{ opacity: currentCount >= maxStaffLimit ? 0.6 : 1 }}
         >
           <UserPlus size={18} />
-          <span>إضافة موظف جديد</span>
+          <span>إضافة سائق أو موظف جديد</span>
         </button>
       </div>
 
-      {/* Staff Grid */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))',
-        gap: '20px'
-      }}>
-        {staffList.map((staff, idx) => (
-          <div
-            key={staff.id}
-            className="glass-panel glass-card-interactive"
-            style={{
-              padding: '24px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '16px',
-              borderTop: `4px solid ${staff.role === 'admin' ? '#f59e0b' : '#0ea5e9'}`
-            }}
-          >
-            {/* Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '12px',
-                  background: staff.role === 'admin' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(14, 165, 233, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontWeight: '800',
-                  color: staff.role === 'admin' ? '#fbbf24' : '#38bdf8'
-                }}>
-                  {staff.role === 'admin' ? <ShieldCheck size={24} /> : <UserCheck size={24} />}
-                </div>
+      {/* Staff Table */}
+      <div className="glass-panel" style={{ overflow: 'hidden' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'right' }}>
+          <thead>
+            <tr style={{ background: 'rgba(15, 23, 42, 0.8)', borderBottom: '1px solid rgba(255, 255, 255, 0.08)' }}>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>الاسم والدور</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>رقم جوال الواتساب</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>البريد الإلكتروني</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>رؤية العقود</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600 }}>حالة الحساب</th>
+              <th style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem', fontWeight: 600, textAlign: 'center' }}>إجراءات</th>
+            </tr>
+          </thead>
+          <tbody>
+            {staffList.map((staff) => {
+              const isDriver = staff.full_name.includes('سائق');
+              const isAdmin = staff.role === 'admin';
 
-                <div>
-                  <div style={{ fontSize: '1.2rem', fontWeight: '800', color: '#ffffff' }}>
-                    {staff.full_name}
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      background: staff.role === 'admin' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(14, 165, 233, 0.2)',
-                      color: staff.role === 'admin' ? '#fbbf24' : '#38bdf8'
-                    }}>
-                      {staff.role === 'admin' ? 'المدير العام' : 'موظف تشغيلي'}
+              return (
+                <tr 
+                  key={staff.id}
+                  style={{ 
+                    borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                    background: staff.role === 'admin' ? 'rgba(245, 158, 11, 0.04)' : 'transparent'
+                  }}
+                >
+                  {/* Name and Role */}
+                  <td style={{ padding: '16px 20px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{
+                        width: '36px',
+                        height: '36px',
+                        borderRadius: '10px',
+                        background: isAdmin ? 'rgba(245, 158, 11, 0.2)' : isDriver ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        {isAdmin ? <ShieldCheck size={18} color="#fbbf24" /> : isDriver ? <Truck size={18} color="#34d399" /> : <Briefcase size={18} color="#38bdf8" />}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: '0.95rem', fontWeight: '700', color: '#ffffff' }}>
+                          {staff.full_name}
+                        </div>
+                        <span style={{
+                          display: 'inline-block',
+                          fontSize: '0.72rem',
+                          fontWeight: 700,
+                          padding: '1px 8px',
+                          borderRadius: '4px',
+                          marginTop: '2px',
+                          background: isAdmin ? '#f59e0b' : isDriver ? 'rgba(16, 185, 129, 0.2)' : 'rgba(56, 189, 248, 0.2)',
+                          color: isAdmin ? '#050811' : isDriver ? '#34d399' : '#38bdf8',
+                          border: `1px solid ${isAdmin ? 'transparent' : isDriver ? 'rgba(16, 185, 129, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`
+                        }}>
+                          {isAdmin ? '👑 المدير العام' : isDriver ? '🚛 سائق رافعة وتوصيل' : '👷 موظف استقبال ومتابعة'}
+                        </span>
+                      </div>
+                    </div>
+                  </td>
+
+                  {/* Phone */}
+                  <td style={{ padding: '16px 20px', direction: 'ltr', textAlign: 'right' }}>
+                    <span style={{ color: '#e2e8f0', fontSize: '0.9rem', fontWeight: 600 }}>
+                      {staff.phone || 'غير مسجل'}
                     </span>
+                  </td>
 
-                    <span style={{
-                      padding: '2px 8px',
-                      borderRadius: '6px',
-                      fontSize: '0.75rem',
-                      fontWeight: 700,
-                      background: staff.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
-                      color: staff.is_active ? '#34d399' : '#f87171'
-                    }}>
-                      {staff.is_active ? 'حساب نشط' : 'حساب موقوف'}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                  {/* Email */}
+                  <td style={{ padding: '16px 20px', color: '#94a3b8', fontSize: '0.85rem' }}>
+                    {staff.email}
+                  </td>
 
-              {/* Delete Staff button (only if not admin) */}
-              {staff.role !== 'admin' && (
-                <button
-                  title="حذف الموظف"
-                  onClick={() => {
-                    if (confirm(`هل أنت متأكد من حذف الموظف (${staff.full_name})؟`)) {
-                      onDeleteStaff(staff.id);
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    color: '#f87171',
-                    borderRadius: '8px',
-                    width: '32px',
-                    height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
+                  {/* View All Permission */}
+                  <td style={{ padding: '16px 20px' }}>
+                    {staff.role === 'admin' ? (
+                      <span style={{ color: '#fbbf24', fontSize: '0.82rem', fontWeight: 700 }}>كافة السجلات (شامل)</span>
+                    ) : (
+                      <button
+                        onClick={() => onToggleViewAll(staff.id, staff.can_view_all_records)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '6px',
+                          color: staff.can_view_all_records ? '#34d399' : '#94a3b8',
+                          fontSize: '0.82rem',
+                          fontWeight: 600
+                        }}
+                      >
+                        {staff.can_view_all_records ? <Eye size={15} /> : <EyeOff size={15} />}
+                        <span>{staff.can_view_all_records ? 'يرى كل العقود' : 'عقوده المسندة فقط'}</span>
+                      </button>
+                    )}
+                  </td>
 
-            {/* Contact info */}
-            <div style={{
-              background: 'rgba(15, 23, 42, 0.6)',
-              padding: '12px',
-              borderRadius: '12px',
-              fontSize: '0.85rem',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '6px'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#cbd5e1' }}>
-                <Mail size={14} color="#94a3b8" />
-                <span>{staff.email}</span>
-              </div>
-              {staff.phone && (
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#cbd5e1' }}>
-                  <Phone size={14} color="#94a3b8" />
-                  <span style={{ direction: 'ltr' }}>{staff.phone}</span>
-                </div>
-              )}
-            </div>
+                  {/* Status Toggle */}
+                  <td style={{ padding: '16px 20px' }}>
+                    {staff.role === 'admin' ? (
+                      <span style={{ color: '#34d399', fontSize: '0.82rem', fontWeight: 700 }}>نشط دائماً</span>
+                    ) : (
+                      <button
+                        onClick={() => onToggleStatus(staff.id, staff.is_active)}
+                        style={{
+                          padding: '4px 10px',
+                          borderRadius: '6px',
+                          border: 'none',
+                          cursor: 'pointer',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          background: staff.is_active ? 'rgba(16, 185, 129, 0.15)' : 'rgba(239, 68, 68, 0.15)',
+                          color: staff.is_active ? '#34d399' : '#f87171'
+                        }}
+                      >
+                        {staff.is_active ? 'نشط 🟢' : 'موقوف 🔴'}
+                      </button>
+                    )}
+                  </td>
 
-            {/* Permissions & Controls */}
-            <div style={{
-              display: 'flex',
-              flexDirection: 'column',
-              gap: '10px',
-              paddingTop: '12px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              {/* Permission: View all records vs only own */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-                  رؤية جميع العقود والسجلات:
-                </span>
-                <button
-                  onClick={() => onToggleViewAll(staff.id, staff.can_view_all_records)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    background: staff.can_view_all_records ? 'rgba(16, 185, 129, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                    color: staff.can_view_all_records ? '#34d399' : '#fbbf24'
-                  }}
-                >
-                  {staff.can_view_all_records ? 'نعم (يرى الكل)' : 'فقط عقوده'}
-                </button>
-              </div>
-
-              {/* Account Status Switcher */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-                  حالة الحساب:
-                </span>
-                <button
-                  onClick={() => onToggleStatus(staff.id, staff.is_active)}
-                  style={{
-                    padding: '4px 10px',
-                    borderRadius: '6px',
-                    border: 'none',
-                    fontSize: '0.78rem',
-                    fontWeight: 700,
-                    cursor: 'pointer',
-                    background: staff.is_active ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
-                    color: staff.is_active ? '#f87171' : '#34d399'
-                  }}
-                >
-                  {staff.is_active ? 'إيقاف الحساب' : 'تفعيل الحساب'}
-                </button>
-              </div>
-            </div>
-
-          </div>
-        ))}
+                  {/* Actions */}
+                  <td style={{ padding: '16px 20px', textAlign: 'center' }}>
+                    {staff.role !== 'admin' && (
+                      <button
+                        onClick={() => {
+                          if (confirm(`هل أنت متأكد من حذف ${staff.full_name}؟`)) {
+                            onDeleteStaff(staff.id);
+                          }
+                        }}
+                        style={{
+                          background: 'rgba(239, 68, 68, 0.15)',
+                          border: '1px solid rgba(239, 68, 68, 0.3)',
+                          color: '#f87171',
+                          width: '32px',
+                          height: '32px',
+                          borderRadius: '8px',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center'
+                        }}
+                        title="حذف الموظف"
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* Add Staff Modal */}
       {isAddModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsAddModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ padding: '28px', maxWidth: '500px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>إضافة حساب موظف جديد</h3>
-              <button 
-                onClick={() => setIsAddModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', padding: '28px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
+              إضافة سائق أو موظف جديد
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '20px' }}>
+              حدد اسم الموظف ودوره ورقم جواله لإسناد وتوجيه العقود الميدانية إليه
+            </p>
 
             <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              
+              {/* Role Type Selector */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#fbbf24' }}>
+                  نوع الدور / الوظيفة:
+                </label>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+                  <div
+                    onClick={() => setJobRole('driver')}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '10px',
+                      border: `2px solid ${jobRole === 'driver' ? '#10b981' : 'rgba(255, 255, 255, 0.1)'}`,
+                      background: jobRole === 'driver' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Truck size={22} color={jobRole === 'driver' ? '#34d399' : '#94a3b8'} style={{ margin: '0 auto 4px auto' }} />
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: jobRole === 'driver' ? '#34d399' : '#ffffff' }}>
+                      سائق رافعة وتوصيل 🚛
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setJobRole('staff')}
+                    style={{
+                      padding: '12px',
+                      borderRadius: '10px',
+                      border: `2px solid ${jobRole === 'staff' ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)'}`,
+                      background: jobRole === 'staff' ? 'rgba(14, 165, 233, 0.15)' : 'rgba(15, 23, 42, 0.6)',
+                      cursor: 'pointer',
+                      textAlign: 'center',
+                      transition: 'all 0.2s'
+                    }}
+                  >
+                    <Briefcase size={22} color={jobRole === 'staff' ? '#38bdf8' : '#94a3b8'} style={{ margin: '0 auto 4px auto' }} />
+                    <div style={{ fontSize: '0.85rem', fontWeight: 700, color: jobRole === 'staff' ? '#38bdf8' : '#ffffff' }}>
+                      موظف استقبال ومتابعة 👷
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Full Name */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  اسم الموظف الثلاثي:
+                  الاسم الكامل:
                 </label>
                 <input
                   type="text"
                   className="form-input"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
-                  placeholder="مثال: عبدالمجيد السالم"
+                  placeholder="مثال: خالد الدوسري"
                   required
                 />
               </div>
 
+              {/* Phone */}
+              <div>
+                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#38bdf8' }}>
+                  رقم جوال الواتساب (لاستلام أوامر التشغيل):
+                </label>
+                <input
+                  type="tel"
+                  className="form-input"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="+9665XXXXXXXX"
+                  style={{ direction: 'ltr', textAlign: 'left' }}
+                  required
+                />
+              </div>
+
+              {/* Email */}
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
                   البريد الإلكتروني (لتسجيل الدخول):
@@ -306,54 +353,25 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                   className="form-input"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="emp1@almuhtaraz.com"
+                  placeholder="khalid@almuhtaraz.com"
                   style={{ direction: 'ltr', textAlign: 'left' }}
                   required
                 />
               </div>
 
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  رقم الجوال:
-                </label>
-                <input
-                  type="tel"
-                  className="form-input"
-                  value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
-                  placeholder="+966550000000"
-                  style={{ direction: 'ltr', textAlign: 'left' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  كلمة المرور:
-                </label>
-                <input
-                  type="password"
-                  className="form-input"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  required
-                />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              {/* Permission */}
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '0.85rem', color: '#cbd5e1' }}>
                 <input
                   type="checkbox"
-                  id="viewAllCheck"
                   checked={canViewAll}
                   onChange={(e) => setCanViewAll(e.target.checked)}
-                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                  style={{ accentColor: '#10b981', width: '16px', height: '16px' }}
                 />
-                <label htmlFor="viewAllCheck" style={{ fontSize: '0.85rem', color: '#e2e8f0', cursor: 'pointer' }}>
-                  منح صلاحية رؤية جميع العقود للحاويات (بدلاً من عقوده فقط)
-                </label>
-              </div>
+                <span>منحه صلاحية رؤية كافة عقود وحاويات المنشأة</span>
+              </label>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '12px' }}>
+              {/* Actions */}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '10px' }}>
                 <button
                   type="button"
                   className="btn-secondary"
@@ -364,15 +382,17 @@ export const StaffManagement: React.FC<StaffManagementProps> = ({
                 <button
                   type="submit"
                   className="btn-primary"
-                  disabled={isSaving}
+                  disabled={isSubmitting}
                 >
-                  {isSaving ? 'جارٍ الإنشاء...' : 'حفظ الموظف'}
+                  {isSubmitting ? 'جارٍ الإضافة...' : 'حفظ وإضافة'}
                 </button>
               </div>
+
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 };

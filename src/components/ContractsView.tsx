@@ -16,7 +16,9 @@ import {
   DollarSign,
   CreditCard,
   Banknote,
-  Receipt as ReceiptIcon
+  Receipt as ReceiptIcon,
+  Truck,
+  UserCheck
 } from 'lucide-react';
 import { Contract, ContractStatus, UserRole, PaymentSettings } from '@/types/database';
 
@@ -28,8 +30,8 @@ interface ContractsViewProps {
   onDeleteContract: (contractId: string) => Promise<void>;
   onSendWhatsApp: (phone: string, message: string) => void;
   onOpenReceipt: (contract: Contract) => void;
-  onOpenManualPayment: (contract: Contract) => void;
-  onSendInvoiceLink: (contract: Contract) => Promise<void>;
+  onConfirmCashPayment: (contract: Contract) => Promise<void>;
+  onSendSadadLink: (contract: Contract) => Promise<void>;
 }
 
 export const ContractsView: React.FC<ContractsViewProps> = ({
@@ -40,13 +42,13 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   onDeleteContract,
   onSendWhatsApp,
   onOpenReceipt,
-  onOpenManualPayment,
-  onSendInvoiceLink
+  onConfirmCashPayment,
+  onSendSadadLink
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'commercial' | 'debris'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | ContractStatus>('all');
-  const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null);
+  const [loadingActionId, setLoadingActionId] = useState<string | null>(null);
 
   const filteredContracts = contracts.filter(c => {
     if (filterType !== 'all' && c.contract_type !== filterType) return false;
@@ -90,10 +92,19 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     return { text: `متبقي ${diffDays} يوماً`, color: '#94a3b8', isUrgent: false };
   };
 
-  const handleInvoiceClick = async (contract: Contract) => {
-    setGeneratingInvoiceId(contract.id);
-    await onSendInvoiceLink(contract);
-    setGeneratingInvoiceId(null);
+  const handleCashClick = async (contract: Contract) => {
+    const remaining = Number(contract.remaining_amount ?? (contract.total_cost - contract.paid_amount));
+    if (confirm(`تأكيد استلام مبلغ (${remaining} ر.س) كاش وتصفير العقد وإصدار سند القبض فوراً؟`)) {
+      setLoadingActionId(`cash-${contract.id}`);
+      await onConfirmCashPayment(contract);
+      setLoadingActionId(null);
+    }
+  };
+
+  const handleSadadClick = async (contract: Contract) => {
+    setLoadingActionId(`sadad-${contract.id}`);
+    await onSendSadadLink(contract);
+    setLoadingActionId(null);
   };
 
   return (
@@ -106,7 +117,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
             سجل العقود والتأجير والتحصيل
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            متابعة العقود، مواعيد السحب والتجديد، السداد الإلكتروني واليدوي، وطباعة سندات القبض
+            متابعة العقود، مواعيد السحب والتجديد، السداد السريع (كاش أو سداد)، وسندات القبض
           </p>
         </div>
       </div>
@@ -135,7 +146,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
 
         {/* Filters */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
-          {/* Type Filter */}
           <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <button
               onClick={() => setFilterType('all')}
@@ -187,7 +197,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
             </button>
           </div>
 
-          {/* Status Filter */}
           <select
             className="form-select"
             value={filterStatus}
@@ -213,6 +222,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
           const timing = calculateRemainingTimeText(contract);
           const remainingAmount = Number(contract.remaining_amount ?? (contract.total_cost - contract.paid_amount));
           const isPaid = remainingAmount <= 0 || contract.payment_status === 'paid';
+          const driverName = contract.assigned_employee?.full_name || 'سعد الدوسري (سائق 🚛)';
 
           return (
             <div
@@ -226,7 +236,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 borderRight: `4px solid ${contract.contract_type === 'commercial' ? 'var(--accent-gold)' : '#38bdf8'}`
               }}
             >
-              {/* Header: Contract Number, Type, Delete */}
+              {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -309,7 +319,23 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 )}
               </div>
 
-              {/* Countdown & Timing Status */}
+              {/* Responsible Driver Badge */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 12px',
+                borderRadius: '8px',
+                background: 'rgba(16, 185, 129, 0.08)',
+                border: '1px solid rgba(16, 185, 129, 0.2)',
+                fontSize: '0.82rem',
+                color: '#34d399'
+              }}>
+                <Truck size={14} />
+                <span>المسؤول الميداني: <strong>{driverName}</strong></span>
+              </div>
+
+              {/* Timing */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -350,11 +376,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                   </span>
                   <ExternalLink size={13} />
                 </a>
-              ) : contract.location_address ? (
-                <div style={{ fontSize: '0.85rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <MapPin size={14} />
-                  <span>{contract.location_address}</span>
-                </div>
               ) : null}
 
               {/* Cost & Payment Details */}
@@ -376,7 +397,6 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                   </strong>
                 </div>
 
-                {/* Status Switcher */}
                 <select
                   value={contract.status}
                   onChange={(e) => onUpdateContractStatus(contract.id, e.target.value as ContractStatus)}
@@ -398,55 +418,61 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 </select>
               </div>
 
-              {/* 💳 Payment Actions Bar */}
+              {/* ⚡ Simple Payment Actions: [كاش] أو [سداد] أو [سند القبض] */}
               <div style={{
                 display: 'flex',
-                gap: '8px',
-                flexWrap: 'wrap',
+                gap: '10px',
                 paddingTop: '10px',
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)'
               }}>
                 {isPaid ? (
-                  /* If Paid: Show PDF Receipt Button */
+                  /* When Paid: Show Receipt PDF Button */
                   <button
                     onClick={() => onOpenReceipt(contract)}
                     className="btn-emerald"
-                    style={{ flex: 1, padding: '7px 12px', fontSize: '0.82rem', justifyContent: 'center' }}
+                    style={{ flex: 1, padding: '9px 14px', fontSize: '0.88rem', justifyContent: 'center' }}
                   >
-                    <ReceiptIcon size={15} />
+                    <ReceiptIcon size={16} />
                     <span>📄 سند القبض (PDF)</span>
                   </button>
                 ) : (
-                  /* If Unpaid: Show Electronic Invoice Link & Manual Payment Buttons */
+                  /* When Unpaid: 2 Clean Direct Options only: [كاش] | [سداد] */
                   <>
-                    {paymentSettings.is_enabled && (
-                      <button
-                        onClick={() => handleInvoiceClick(contract)}
-                        disabled={generatingInvoiceId === contract.id}
-                        className="btn-primary"
-                        style={{ flex: 1, padding: '7px 10px', fontSize: '0.8rem', justifyContent: 'center' }}
-                        title="توليد رابط Moyasar مع Apple Pay ومدى وإرساله للعميل بالواتساب"
-                      >
-                        <CreditCard size={14} />
-                        <span>{generatingInvoiceId === contract.id ? 'جارٍ التوليد...' : '💳 رابط سداد إلكتروني'}</span>
-                      </button>
-                    )}
-
+                    {/* Option 1: Cash */}
                     <button
-                      onClick={() => onOpenManualPayment(contract)}
-                      className="btn-secondary"
+                      onClick={() => handleCashClick(contract)}
+                      disabled={loadingActionId === `cash-${contract.id}`}
+                      className="btn-emerald"
                       style={{
                         flex: 1,
-                        padding: '7px 10px',
-                        fontSize: '0.8rem',
+                        padding: '9px 12px',
+                        fontSize: '0.88rem',
+                        fontWeight: 800,
                         justifyContent: 'center',
-                        background: 'rgba(16, 185, 129, 0.15)',
-                        border: '1px solid rgba(16, 185, 129, 0.3)',
-                        color: '#34d399'
+                        background: 'linear-gradient(135deg, #10b981, #059669)'
                       }}
                     >
-                      <Banknote size={14} />
-                      <span>💵 تسجيل سداد نقدي</span>
+                      <Banknote size={17} />
+                      <span>{loadingActionId === `cash-${contract.id}` ? 'جارٍ السداد...' : '💵 كاش'}</span>
+                    </button>
+
+                    {/* Option 2: Sadad Electronic Link */}
+                    <button
+                      onClick={() => handleSadadClick(contract)}
+                      disabled={loadingActionId === `sadad-${contract.id}`}
+                      className="btn-primary"
+                      style={{
+                        flex: 1,
+                        padding: '9px 12px',
+                        fontSize: '0.88rem',
+                        fontWeight: 800,
+                        justifyContent: 'center',
+                        background: 'linear-gradient(135deg, #f59e0b, #d97706)'
+                      }}
+                      title="إرسال رابط سداد إلكتروني مع Apple Pay ومدى بالواتساب"
+                    >
+                      <CreditCard size={17} />
+                      <span>{loadingActionId === `sadad-${contract.id}` ? 'جارٍ الإرسال...' : '💳 سداد'}</span>
                     </button>
                   </>
                 )}

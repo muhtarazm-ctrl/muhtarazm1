@@ -13,14 +13,16 @@ import {
   DollarSign, 
   MessageSquare,
   CheckCircle,
-  AlertTriangle
+  AlertTriangle,
+  UserCheck
 } from 'lucide-react';
-import { Container, ContractPeriodType, ContainerType } from '@/types/database';
+import { Container, ContractPeriodType, ContainerType, Profile } from '@/types/database';
 
 interface NewContractModalProps {
   isOpen: boolean;
   onClose: () => void;
   containers: Container[];
+  staffList?: Profile[];
   preSelectedContainerId?: string;
   onSaveContract: (contractData: any) => Promise<boolean>;
 }
@@ -29,6 +31,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   isOpen,
   onClose,
   containers,
+  staffList = [],
   preSelectedContainerId,
   onSaveContract
 }) => {
@@ -36,10 +39,11 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   const [contractType, setContractType] = useState<ContainerType>('debris');
   const [periodType, setPeriodType] = useState<ContractPeriodType>('daily');
   const [selectedContainerId, setSelectedContainerId] = useState<string>('');
+  const [assignedEmployeeId, setAssignedEmployeeId] = useState<string>('');
   
   // Customer
   const [customerName, setCustomerName] = useState('');
-  const [customerPhone, setCustomerPhone] = useState('+966');
+  const [customerPhone, setCustomerPhone] = useState('+9665');
   
   // Dates & Durations
   const [durationDays, setDurationDays] = useState(1);
@@ -63,6 +67,17 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   const availableContainers = containers.filter(c => 
     c.status === 'available' && c.type === contractType
   );
+
+  // Filter drivers / staff for selector
+  const activeStaff = staffList.filter(s => s.is_active);
+
+  // Default select first driver if available
+  useEffect(() => {
+    if (activeStaff.length > 0 && !assignedEmployeeId) {
+      const driver = activeStaff.find(s => s.full_name.includes('سائق')) || activeStaff[0];
+      if (driver) setAssignedEmployeeId(driver.id);
+    }
+  }, [activeStaff, assignedEmployeeId]);
 
   // Set pre-selected container if provided
   useEffect(() => {
@@ -120,53 +135,71 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
     }
   }, [selectedContainerId, contractType, periodType, durationDays, containers]);
 
-  // GPS Location Handler
+  // Fetch Current Device GPS Location
   const handleGetCurrentLocation = () => {
     if (!navigator.geolocation) {
-      alert('خدمة تحديد الموقع الجغرافي غير مدعومة في متصفحك.');
+      alert('المتصفح لا يدعم تحديد الموقع الجغرافي.');
       return;
     }
+
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const lat = position.coords.latitude;
-        const lng = position.coords.longitude;
+      (pos) => {
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
         setLatitude(lat);
         setLongitude(lng);
-        const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-        setGoogleMapsUrl(mapUrl);
+        const mapsUrl = `https://maps.google.com/?q=${lat},${lng}`;
+        setGoogleMapsUrl(mapsUrl);
+        setLocationAddress(`إحداثيات الموقع المباشر: (${lat.toFixed(5)}, ${lng.toFixed(5)})`);
         setIsLocating(false);
       },
-      (error) => {
-        alert('تعذر تحديد الموقع تلقائياً. يمكنك لصق رابط خرائط جوجل يدوياً.');
+      (err) => {
         setIsLocating(false);
+        alert('تعذر تحديد الموقع الجغرافي: ' + err.message);
       },
-      { enableHighAccuracy: true }
+      { enableHighAccuracy: true, timeout: 10000 }
     );
+  };
+
+  const handleContractTypeChange = (type: ContainerType) => {
+    setContractType(type);
+    setSelectedContainerId('');
+    if (type === 'debris') {
+      setPeriodType('daily');
+      setDurationDays(1);
+      setTotalCost(150);
+      setPaidAmount(150);
+    } else {
+      setPeriodType('monthly');
+      setTotalCost(3500);
+      setPaidAmount(3500);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedContainerId) {
-      alert('يرجى اختيار الحاوية المتاحة.');
+      alert('يرجى اختيار الحاوية المطلوبة.');
       return;
     }
-    if (!customerName || !customerPhone || customerPhone.length < 9) {
-      alert('يرجى إدخال اسم العميل ورقم جوال الواتساب بشكل صحيح.');
+    if (!customerName.trim() || !customerPhone.trim()) {
+      alert('يرجى إدخال اسم العميل ورقم الجوال.');
       return;
     }
 
     setIsSaving(true);
-    const contractNumber = `CTR-${Date.now().toString().slice(-5)}`;
-    
-    const payload = {
+    const contractNumber = `CTR-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const contractPayload = {
       contract_number: contractNumber,
+      container_id: selectedContainerId,
+      assigned_employee_id: assignedEmployeeId || null,
+      customer_name: customerName,
+      customer_phone: customerPhone,
       contract_type: contractType,
       period_type: periodType,
       duration_days: durationDays,
-      container_id: selectedContainerId,
-      customer_name: customerName,
-      customer_phone: customerPhone,
       start_date: new Date(startDate).toISOString(),
       end_date: new Date(pickupDate).toISOString(),
       expected_pickup_time: new Date(pickupDate).toISOString(),
@@ -179,10 +212,17 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
       notes: notes
     };
 
-    const success = await onSaveContract(payload);
+    const success = await onSaveContract(contractPayload);
     setIsSaving(false);
+
     if (success) {
       onClose();
+      // Reset form
+      setCustomerName('');
+      setCustomerPhone('+9665');
+      setSelectedContainerId('');
+      setGoogleMapsUrl('');
+      setLocationAddress('');
     }
   };
 
@@ -190,128 +230,188 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '750px', padding: '30px' }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '780px', padding: '32px' }}>
         
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', paddingBottom: '16px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '40px', height: '40px', borderRadius: '10px', background: 'linear-gradient(135deg, #f59e0b, #d97706)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Truck size={22} color="#050811" />
-            </div>
-            <div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: '800', color: '#ffffff' }}>
-                تسجيل عقد حاوية جديد
-              </h3>
-              <p style={{ fontSize: '0.82rem', color: '#94a3b8' }}>
-                إدخال بيانات العقد، تحديد الموقع عبر GPS، وجدولة تنبيهات الواتساب التلقائية
-              </p>
-            </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+          <div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Truck size={24} color="var(--accent-gold)" />
+              <span>توثيق وحجز عقد حاوية جديد</span>
+            </h2>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '2px' }}>
+              إدخال بيانات العقد، تحديد السائق المسؤول، ورابط الموقع الجغرافي
+            </p>
           </div>
-          <button 
+
+          <button
             onClick={onClose}
-            style={{ background: 'rgba(255, 255, 255, 0.08)', border: 'none', color: '#94a3b8', borderRadius: '50%', width: '32px', height: '32px', cursor: 'pointer' }}
+            style={{
+              width: '36px',
+              height: '36px',
+              borderRadius: '10px',
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: 'none',
+              color: '#94a3b8',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              transition: 'all 0.2s'
+            }}
           >
             <X size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
           
-          {/* 1. Category Selection: Commercial vs Debris */}
+          {/* 1. Contract Type Selector (Commercial vs Debris Only) */}
           <div>
-            <label style={{ display: 'block', fontSize: '0.9rem', fontWeight: '700', marginBottom: '8px', color: '#fbbf24' }}>
-              نوع العقد والحاوية:
+            <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '8px', color: '#e2e8f0' }}>
+              1. نوع الحاوية والعقد المطلوب:
             </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-              <button
-                type="button"
-                id="select-type-debris"
-                onClick={() => {
-                  setContractType('debris');
-                  setPeriodType('daily');
-                  setSelectedContainerId('');
-                }}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+              {/* Debris Daily */}
+              <div
+                onClick={() => handleContractTypeChange('debris')}
                 style={{
-                  padding: '14px',
+                  padding: '16px',
                   borderRadius: '14px',
-                  border: '2px solid',
-                  borderColor: contractType === 'debris' ? '#f59e0b' : 'rgba(255, 255, 255, 0.1)',
-                  background: contractType === 'debris' ? 'rgba(245, 158, 11, 0.18)' : 'rgba(15, 23, 42, 0.6)',
-                  color: contractType === 'debris' ? '#ffffff' : '#94a3b8',
+                  border: `2px solid ${contractType === 'debris' ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)'}`,
+                  background: contractType === 'debris' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
                   cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s'
                 }}
               >
-                <div style={{ fontWeight: '800', fontSize: '1.05rem', color: contractType === 'debris' ? '#fbbf24' : '#e2e8f0' }}>
-                  حاوية أنقاض (يومي)
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '1rem', fontWeight: '800', color: contractType === 'debris' ? '#38bdf8' : '#ffffff' }}>
+                    حاوية أنقاض ومخلفات 🏗️
+                  </span>
+                  <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: '#38bdf8', color: '#050811', fontWeight: 800 }}>
+                    عقد يومي
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>
-                  مخلفات بناء وترميم مع تحديد موعد السحب
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '6px' }}>
+                  تأجير يومي لمخلفات البناء والترميم، مع تنبيه آلي قبل 4 ساعات من السحب.
                 </div>
-              </button>
+              </div>
 
-              <button
-                type="button"
-                id="select-type-commercial"
-                onClick={() => {
-                  setContractType('commercial');
-                  setPeriodType('monthly');
-                  setSelectedContainerId('');
-                }}
+              {/* Commercial Recurring */}
+              <div
+                onClick={() => handleContractTypeChange('commercial')}
                 style={{
-                  padding: '14px',
+                  padding: '16px',
                   borderRadius: '14px',
-                  border: '2px solid',
-                  borderColor: contractType === 'commercial' ? '#6366f1' : 'rgba(255, 255, 255, 0.1)',
-                  background: contractType === 'commercial' ? 'rgba(99, 102, 241, 0.18)' : 'rgba(15, 23, 42, 0.6)',
-                  color: contractType === 'commercial' ? '#ffffff' : '#94a3b8',
+                  border: `2px solid ${contractType === 'commercial' ? '#fbbf24' : 'rgba(255, 255, 255, 0.1)'}`,
+                  background: contractType === 'commercial' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
                   cursor: 'pointer',
-                  textAlign: 'center',
-                  transition: 'all 0.2s ease'
+                  transition: 'all 0.2s'
                 }}
               >
-                <div style={{ fontWeight: '800', fontSize: '1.05rem', color: contractType === 'commercial' ? '#a5b4fc' : '#e2e8f0' }}>
-                  حاوية تجارية
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontSize: '1rem', fontWeight: '800', color: contractType === 'commercial' ? '#fbbf24' : '#ffffff' }}>
+                    حاوية تجارية للمنشآت 🏢
+                  </span>
+                  <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: '#f59e0b', color: '#050811', fontWeight: 800 }}>
+                    شهري / سنوي
+                  </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>
-                  عقود دورية (شهري / نصف سنوي / سنوي)
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '6px' }}>
+                  عقود دورية للمستودعات والمجمعات، مع تنبيهات تجديد قبل 7 أيام ويومين.
                 </div>
-              </button>
+              </div>
             </div>
           </div>
 
-          {/* 2. Container Selector & Duration */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+          {/* 2. Container Selector & Responsible Staff / Driver Selector */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+            {/* Container */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                اختيار رقم الحاوية المتاحة:
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+                2. الحاوية المتاحة للتأجير:
               </label>
               <select
-                id="contract-container-select"
                 className="form-select"
                 value={selectedContainerId}
                 onChange={(e) => setSelectedContainerId(e.target.value)}
                 required
               >
-                <option value="">-- اختر الحاوية --</option>
-                {availableContainers.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.container_number} ({c.type === 'commercial' ? 'تجاري' : 'أنقاض'}) - {c.type === 'debris' ? `${c.daily_rate} ر.س/يوم` : `${c.monthly_rate} ر.س/شهر`}
+                <option value="">-- اختر حاوية متاحة ({availableContainers.length} متاحة) --</option>
+                {availableContainers.map(cont => (
+                  <option key={cont.id} value={cont.id}>
+                    {cont.container_number} — {contractType === 'debris' ? `${cont.daily_rate} ر.س/يوم` : `${cont.monthly_rate} ر.س/شهر`}
                   </option>
                 ))}
               </select>
-              {availableContainers.length === 0 && (
-                <div style={{ fontSize: '0.78rem', color: '#f87171', marginTop: '4px' }}>
-                  ⚠️ لا توجد حاويات متاحة حالياً من هذا النوع.
-                </div>
-              )}
             </div>
 
+            {/* Responsible Driver / Staff Dropdown */}
+            <div>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#34d399' }}>
+                3. المسؤول (سائق التوصيل 🚛 / موظف المتابعة 👷):
+              </label>
+              <select
+                className="form-select"
+                value={assignedEmployeeId}
+                onChange={(e) => setAssignedEmployeeId(e.target.value)}
+                style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.08)' }}
+              >
+                <option value="">-- اختر السائق أو الموظف المسؤول --</option>
+                {activeStaff.map(staff => (
+                  <option key={staff.id} value={staff.id}>
+                    {staff.full_name} ({staff.phone})
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 3. Customer Info */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+            <div>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+                اسم العميل أو المقاول:
+              </label>
+              <div style={{ position: 'relative' }}>
+                <User size={16} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ paddingRight: '36px' }}
+                  placeholder="مثال: مؤسسة صروح البناء / أحمد العتيبي"
+                  value={customerName}
+                  onChange={(e) => setCustomerName(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            <div>
+              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+                رقم جوال العميل (لإشعارات الواتساب):
+              </label>
+              <div style={{ position: 'relative' }}>
+                <Phone size={16} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
+                <input
+                  type="tel"
+                  className="form-input"
+                  style={{ paddingRight: '36px', direction: 'ltr', textAlign: 'left' }}
+                  placeholder="+9665XXXXXXXX"
+                  value={customerPhone}
+                  onChange={(e) => setCustomerPhone(e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 4. Dates & Durations */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
             {contractType === 'debris' ? (
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  مدة العقد (عدد الأيام):
+                  عدد الأيام (عقد يومي):
                 </label>
                 <input
                   type="number"
@@ -339,43 +439,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                 </select>
               </div>
             )}
-          </div>
 
-          {/* 3. Customer Info */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                اسم العميل / المؤسسة:
-              </label>
-              <input
-                id="contract-customer-name"
-                type="text"
-                className="form-input"
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="مثال: مؤسسة الأفق / خالد العتيبي"
-                required
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                رقم الجوال (واتساب):
-              </label>
-              <input
-                id="contract-customer-phone"
-                type="tel"
-                className="form-input"
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="+966500000000"
-                style={{ direction: 'ltr', textAlign: 'left' }}
-                required
-              />
-            </div>
-          </div>
-
-          {/* 4. Dates & Expected Pickup */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
                 تاريخ ووقت التنزيل:
@@ -388,9 +452,10 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                 required
               />
             </div>
+
             <div>
-              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                {contractType === 'debris' ? 'تاريخ ووقت السحب المتوقع:' : 'تاريخ نهاية العقد:'}
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#fbbf24' }}>
+                موعد السحب المتوقع:
               </label>
               <input
                 type="datetime-local"
@@ -402,114 +467,92 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
           </div>
 
-          {/* 5. Location with GPS and Maps */}
+          {/* 5. GPS Location & Google Maps */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#e2e8f0' }}>
-                الموقع الجغرافي وخريطة التوصيل:
+              <label style={{ fontSize: '0.88rem', fontWeight: '700', color: '#e2e8f0' }}>
+                الموقع الجغرافي ورابط خرائط Google:
               </label>
               <button
                 type="button"
-                id="btn-get-gps-location"
                 onClick={handleGetCurrentLocation}
+                disabled={isLocating}
                 style={{
                   display: 'flex',
                   alignItems: 'center',
                   gap: '6px',
-                  background: 'rgba(14, 165, 233, 0.2)',
-                  border: '1px solid rgba(14, 165, 233, 0.4)',
+                  background: 'rgba(56, 189, 248, 0.15)',
+                  border: '1px solid rgba(56, 189, 248, 0.3)',
                   color: '#38bdf8',
-                  padding: '4px 12px',
+                  padding: '4px 10px',
                   borderRadius: '8px',
-                  fontSize: '0.8rem',
-                  fontWeight: 600,
+                  fontSize: '0.78rem',
+                  fontWeight: 700,
                   cursor: 'pointer'
                 }}
               >
-                <Navigation size={13} />
-                <span>{isLocating ? 'جارٍ تحديد الموقع...' : 'تحديد موقعي الآن عبر GPS'}</span>
+                <Navigation size={13} className={isLocating ? 'animate-spin' : ''} />
+                <span>{isLocating ? 'جارٍ التحديد...' : 'تحديد موقعي الحالي عبر GPS'}</span>
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: '12px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               <input
                 type="text"
                 className="form-input"
+                placeholder="رابط خرائط جوجل (Google Maps URL)..."
                 value={googleMapsUrl}
                 onChange={(e) => setGoogleMapsUrl(e.target.value)}
-                placeholder="رابط خرائط جوجل (Google Maps Link) أو اتركه ليتولد من GPS"
-                style={{ direction: 'ltr', textAlign: 'left', fontSize: '0.85rem' }}
+                style={{ direction: 'ltr', textAlign: 'left' }}
               />
               <input
                 type="text"
                 className="form-input"
+                placeholder="وصف الحي أو العنوان (مثال: حي الملقا - شارع 15)"
                 value={locationAddress}
                 onChange={(e) => setLocationAddress(e.target.value)}
-                placeholder="وصف الحي أو الشارع (مثال: حي النرجس - شارع 15)"
               />
             </div>
-            {latitude && longitude && (
-              <div style={{ fontSize: '0.78rem', color: '#34d399', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                <MapPin size={12} />
-                <span>تم التقاط الإحداثيات: {latitude.toFixed(5)}, {longitude.toFixed(5)}</span>
-              </div>
-            )}
           </div>
 
-          {/* 6. Pricing & Payments */}
+          {/* 6. Pricing Summary */}
           <div style={{
-            background: 'rgba(15, 23, 42, 0.8)',
+            background: 'rgba(15, 23, 42, 0.7)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            borderRadius: '12px',
             padding: '16px',
-            borderRadius: '16px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
             display: 'grid',
-            gridTemplateColumns: '1fr 1fr 1fr',
-            gap: '12px'
+            gridTemplateColumns: 'repeat(3, 1fr)',
+            gap: '12px',
+            textAlign: 'center'
           }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>
-                التكلفة الإجمالية:
-              </label>
-              <input
-                type="number"
-                className="form-input"
-                value={totalCost}
-                onChange={(e) => setTotalCost(parseFloat(e.target.value) || 0)}
-                style={{ fontWeight: '800', color: '#fbbf24' }}
-                required
-              />
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>إجمالي تكلفة العقد</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '900', color: '#fbbf24' }}>
+                {totalCost} ر.س
+              </div>
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>
-                المبلغ المدفوع:
-              </label>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المبلغ المدفوع</div>
               <input
                 type="number"
+                min="0"
+                max={totalCost}
                 className="form-input"
+                style={{ textAlign: 'center', padding: '4px', fontSize: '1rem', fontWeight: 800, marginTop: '4px' }}
                 value={paidAmount}
-                onChange={(e) => setPaidAmount(parseFloat(e.target.value) || 0)}
-                style={{ fontWeight: '800', color: '#34d399' }}
-                required
+                onChange={(e) => setPaidAmount(Number(e.target.value))}
               />
             </div>
             <div>
-              <label style={{ display: 'block', fontSize: '0.8rem', color: '#94a3b8', marginBottom: '4px' }}>
-                المبلغ المتبقي:
-              </label>
-              <div style={{
-                padding: '12px 16px',
-                background: 'rgba(0, 0, 0, 0.3)',
-                borderRadius: '12px',
-                fontWeight: '800',
-                fontSize: '1rem',
-                color: (totalCost - paidAmount) > 0 ? '#f87171' : '#34d399'
-              }}>
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المتبقي المستحق</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '900', color: (totalCost - paidAmount) > 0 ? '#f87171' : '#34d399' }}>
                 {(totalCost - paidAmount)} ر.س
               </div>
             </div>
           </div>
 
-          {/* Submit Actions */}
+          {/* Actions */}
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
             <button
               type="button"
@@ -519,14 +562,14 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             >
               إلغاء
             </button>
+
             <button
-              id="submit-contract-btn"
               type="submit"
               className="btn-primary"
               disabled={isSaving}
-              style={{ minWidth: '160px' }}
+              style={{ minWidth: '180px' }}
             >
-              {isSaving ? 'جارٍ الحفظ والجدولة...' : 'توثيق وحفظ العقد'}
+              {isSaving ? 'جارٍ توثيق العقد...' : 'توثيق العقد وإصدار التنبيهات'}
             </button>
           </div>
 
