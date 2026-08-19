@@ -1,5 +1,16 @@
 export type UserRole = 'admin' | 'employee';
 
+export interface StaffPermissions {
+  can_view_all_contracts: boolean; // رؤية كافة العقود أم العقود المعينة له فقط
+  can_view_financials: boolean; // رؤية إجمالي المبالغ والأسعار والإيرادات
+  can_create_contracts: boolean; // إنشاء وتوثيق عقود جديدة
+  can_extend_contracts: boolean; // تمديد وتأجيل السحب
+  can_collect_payments: boolean; // تحصيل كاش وإصدار سند قبض
+  can_send_payment_links: boolean; // إرسال روابط سداد عبر الواتساب
+  can_manage_inventory: boolean; // سحب واستلام الحاويات للمخزون
+  can_send_whatsapp: boolean; // إرسال إشعارات الواتساب
+}
+
 export interface Profile {
   id: string;
   full_name: string;
@@ -7,7 +18,8 @@ export interface Profile {
   phone?: string;
   role: UserRole;
   is_active: boolean;
-  can_view_all_records: boolean;
+  can_view_all_records: boolean; // legacy
+  permissions?: StaffPermissions;
   notes?: string;
   created_at: string;
   updated_at: string;

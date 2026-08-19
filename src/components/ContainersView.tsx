@@ -15,12 +15,13 @@ import {
   User,
   Phone
 } from 'lucide-react';
-import { Container, ContainerStatus, ContainerType, UserRole, Contract } from '@/types/database';
+import { Container, ContainerStatus, ContainerType, UserRole, Contract, StaffPermissions } from '@/types/database';
 
 interface ContainersViewProps {
   containers: Container[];
   contracts?: Contract[];
   userRole: UserRole;
+  permissions?: StaffPermissions;
   onUpdateStatus: (containerId: string, status: ContainerStatus) => Promise<void>;
   onAddContainer: (containerData: Partial<Container>) => Promise<boolean>;
   onDeleteContainer: (containerId: string) => Promise<void>;
@@ -32,6 +33,7 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
   containers,
   contracts = [],
   userRole,
+  permissions,
   onUpdateStatus,
   onAddContainer,
   onDeleteContainer,
@@ -300,7 +302,11 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
               }}>
                 <span style={{ color: '#94a3b8' }}>سعر التأجير:</span>
                 <strong style={{ color: '#ffffff' }}>
-                  {isDebris ? `${container.daily_rate} ر.س / يوم` : `${container.monthly_rate} ر.س / شهر`}
+                  {userRole === 'admin' || permissions?.can_view_financials !== false ? (
+                    isDebris ? `${container.daily_rate} ر.س / يوم` : `${container.monthly_rate} ر.س / شهر`
+                  ) : (
+                    <span style={{ color: '#94a3b8' }}>*** ر.س 🔒</span>
+                  )}
                 </strong>
               </div>
 
@@ -311,7 +317,7 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
                 </p>
               )}
 
-              {/* ⚡ Functional Action Buttons (تأجير للحاوية المتاحة / تمديد للمؤجرة) */}
+              {/* ⚡ Functional Action Buttons */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -321,52 +327,58 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
               }}>
                 {container.status === 'available' ? (
                   /* Available: 📝 تأجير الحاوية */
-                  <button
-                    className="btn-primary"
-                    style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', fontWeight: 700, justifyContent: 'center' }}
-                    onClick={() => onOpenRentModal(container.id)}
-                  >
-                    <FilePlus size={15} />
-                    <span>📝 تأجير الحاوية (عقد جديد)</span>
-                  </button>
+                  (userRole === 'admin' || permissions?.can_create_contracts !== false) && (
+                    <button
+                      className="btn-primary"
+                      style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', fontWeight: 700, justifyContent: 'center' }}
+                      onClick={() => onOpenRentModal(container.id)}
+                    >
+                      <FilePlus size={15} />
+                      <span>📝 تأجير الحاوية (عقد جديد)</span>
+                    </button>
+                  )
                 ) : container.status === 'rented' && activeContract ? (
                   /* Rented: 🔄 تمديد العقد */
-                  <button
-                    className="btn-emerald"
-                    style={{
-                      flex: 1,
-                      padding: '8px 12px',
-                      fontSize: '0.82rem',
-                      fontWeight: 800,
-                      justifyContent: 'center',
-                      background: 'linear-gradient(135deg, #0284c7, #0369a1)'
-                    }}
-                    onClick={() => onOpenExtendModal && onOpenExtendModal(activeContract)}
-                  >
-                    <RotateCw size={15} />
-                    <span>🔄 تمديد العقد وتأجيل السحب</span>
-                  </button>
+                  (userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
+                    <button
+                      className="btn-emerald"
+                      style={{
+                        flex: 1,
+                        padding: '8px 12px',
+                        fontSize: '0.82rem',
+                        fontWeight: 800,
+                        justifyContent: 'center',
+                        background: 'linear-gradient(135deg, #0284c7, #0369a1)'
+                      }}
+                      onClick={() => onOpenExtendModal && onOpenExtendModal(activeContract)}
+                    >
+                      <RotateCw size={15} />
+                      <span>🔄 تمديد العقد وتأجيل السحب</span>
+                    </button>
+                  )
                 ) : null}
 
-                {/* Status Switcher Dropdown */}
-                <select
-                  value={container.status}
-                  onChange={(e) => onUpdateStatus(container.id, e.target.value as ContainerStatus)}
-                  style={{
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    borderRadius: '8px',
-                    padding: '6px 8px',
-                    fontSize: '0.78rem',
-                    fontFamily: 'inherit',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <option value="available">متاحة 🟢</option>
-                  <option value="rented">مؤجرة 🔴</option>
-                  <option value="maintenance">صيانة 🛠️</option>
-                </select>
+                {/* Status Switcher Dropdown (Admin or if has inventory permissions) */}
+                {(userRole === 'admin' || permissions?.can_manage_inventory !== false) && (
+                  <select
+                    value={container.status}
+                    onChange={(e) => onUpdateStatus(container.id, e.target.value as ContainerStatus)}
+                    style={{
+                      background: '#0f172a',
+                      color: '#f8fafc',
+                      border: '1px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '8px',
+                      padding: '6px 8px',
+                      fontSize: '0.78rem',
+                      fontFamily: 'inherit',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <option value="available">متاحة 🟢</option>
+                    <option value="rented">مؤجرة 🔴</option>
+                    <option value="maintenance">صيانة 🛠️</option>
+                  </select>
+                )}
 
                 {/* Delete Container (Admin Only) */}
                 {userRole === 'admin' && (

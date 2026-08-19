@@ -16,13 +16,15 @@ import {
   Plus,
   RotateCw
 } from 'lucide-react';
-import { Container, Contract, Customer, NotificationLog } from '@/types/database';
+import { Container, Contract, Customer, NotificationLog, StaffPermissions, UserRole } from '@/types/database';
 
 interface SmartSearchProps {
   containers: Container[];
   contracts: Contract[];
   customers: Customer[];
   notifications: NotificationLog[];
+  userRole?: UserRole;
+  permissions?: StaffPermissions;
   onOpenNewContractWithContainer?: (containerId: string) => void;
   onViewContract?: (contract: Contract) => void;
   onSendWhatsApp?: (phone: string, message: string) => void;
@@ -37,6 +39,8 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
   contracts,
   customers,
   notifications,
+  userRole = 'admin',
+  permissions,
   onOpenNewContractWithContainer,
   onViewContract,
   onSendWhatsApp,
@@ -303,7 +307,11 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
             </div>
           </div>
           <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#ffffff' }}>
-            {stats.totalRevenue.toLocaleString()} <span style={{ fontSize: '0.85rem', color: '#fbbf24' }}>ر.س</span>
+            {userRole === 'admin' || permissions?.can_view_financials !== false ? (
+              <>{stats.totalRevenue.toLocaleString()} <span style={{ fontSize: '0.85rem', color: '#fbbf24' }}>ر.س</span></>
+            ) : (
+              <span style={{ fontSize: '1.2rem', color: '#94a3b8' }}>محجوب 🔒</span>
+            )}
           </div>
         </div>
       </div>
@@ -492,15 +500,21 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                     borderTop: '1px solid rgba(255, 255, 255, 0.08)'
                   }}>
                     <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>
-                      التكلفة: <strong style={{ color: '#ffffff' }}>{contract.total_cost} ر.س</strong>
-                      {' '}| المتبقي: <strong style={{ color: (contract.total_cost - contract.paid_amount) > 0 ? '#f87171' : '#34d399' }}>{(contract.total_cost - contract.paid_amount)} ر.س</strong>
+                      {userRole === 'admin' || permissions?.can_view_financials !== false ? (
+                        <>
+                          التكلفة: <strong style={{ color: '#ffffff' }}>{contract.total_cost} ر.س</strong>
+                          {' '}| المتبقي: <strong style={{ color: (contract.total_cost - contract.paid_amount) > 0 ? '#f87171' : '#34d399' }}>{(contract.total_cost - contract.paid_amount)} ر.س</strong>
+                        </>
+                      ) : (
+                        <span>المبالغ المالية: <strong>*** ر.س 🔒</strong></span>
+                      )}
                     </span>
 
                     {/* Simple Payment Actions + Extension */}
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {(contract.total_cost - contract.paid_amount) <= 0 || contract.payment_status === 'paid' ? (
                         <>
-                          {onOpenReceipt && (
+                          {onOpenReceipt && (userRole === 'admin' || permissions?.can_collect_payments !== false) && (
                             <button
                               className="btn-emerald"
                               style={{ padding: '6px 10px', fontSize: '0.78rem' }}
@@ -509,7 +523,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                               <span>📄 سند القبض</span>
                             </button>
                           )}
-                          {onOpenExtendModal && (
+                          {onOpenExtendModal && (userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
                             <button
                               className="btn-secondary"
                               style={{ padding: '6px 8px', fontSize: '0.78rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
@@ -522,7 +536,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                         </>
                       ) : (
                         <>
-                          {onConfirmCashPayment && (
+                          {onConfirmCashPayment && (userRole === 'admin' || permissions?.can_collect_payments !== false) && (
                             <button
                               className="btn-emerald"
                               style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 800 }}
@@ -531,7 +545,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                               <span>💵 كاش</span>
                             </button>
                           )}
-                          {onSendSadadLink && (
+                          {onSendSadadLink && (userRole === 'admin' || permissions?.can_send_payment_links !== false) && (
                             <button
                               className="btn-primary"
                               style={{ padding: '6px 10px', fontSize: '0.78rem', fontWeight: 800 }}
@@ -540,7 +554,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                               <span>💳 سداد</span>
                             </button>
                           )}
-                          {onOpenExtendModal && (
+                          {onOpenExtendModal && (userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
                             <button
                               className="btn-secondary"
                               style={{ padding: '6px 8px', fontSize: '0.78rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}

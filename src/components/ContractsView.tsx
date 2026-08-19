@@ -21,12 +21,13 @@ import {
   UserCheck,
   RotateCw
 } from 'lucide-react';
-import { Contract, ContractStatus, UserRole, PaymentSettings } from '@/types/database';
+import { Contract, ContractStatus, UserRole, PaymentSettings, StaffPermissions } from '@/types/database';
 
 interface ContractsViewProps {
   contracts: Contract[];
   userRole: UserRole;
   paymentSettings: PaymentSettings;
+  permissions?: StaffPermissions;
   onUpdateContractStatus: (contractId: string, status: ContractStatus) => Promise<void>;
   onDeleteContract: (contractId: string) => Promise<void>;
   onSendWhatsApp: (phone: string, message: string) => void;
@@ -40,6 +41,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   contracts,
   userRole,
   paymentSettings,
+  permissions,
   onUpdateContractStatus,
   onDeleteContract,
   onSendWhatsApp,
@@ -320,7 +322,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                   </div>
                 </div>
 
-                {contract.customer?.phone && (
+                {contract.customer?.phone && (userRole === 'admin' || permissions?.can_send_whatsapp !== false) && (
                   <button
                     className="btn-emerald"
                     style={{ padding: '6px 12px', fontSize: '0.8rem' }}
@@ -369,7 +371,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 </div>
 
                 {/* 🔄 Quick Extension Button */}
-                {contract.status !== 'completed' && (
+                {contract.status !== 'completed' && (userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
                   <button
                     onClick={() => onOpenExtendModal(contract)}
                     style={{
@@ -406,7 +408,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                     color: '#38bdf8',
                     fontSize: '0.85rem',
                     textDecoration: 'none',
-                    background: 'rgba(14, 165, 233, 0.08)',
+                    background: 'rgba(145, 165, 233, 0.08)',
                     padding: '8px 12px',
                     borderRadius: '8px',
                     border: '1px solid rgba(14, 165, 233, 0.2)'
@@ -430,12 +432,21 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 fontSize: '0.85rem'
               }}>
                 <div>
-                  <span style={{ color: '#94a3b8' }}>التكلفة:</span> <strong>{contract.total_cost} ر.س</strong>
+                  <span style={{ color: '#94a3b8' }}>التكلفة:</span>{' '}
+                  <strong>
+                    {userRole === 'admin' || permissions?.can_view_financials !== false ? `${contract.total_cost} ر.س` : <span style={{ color: '#94a3b8' }}>*** 🔒</span>}
+                  </strong>
                 </div>
                 <div>
                   <span style={{ color: '#94a3b8' }}>المتبقي:</span>{' '}
-                  <strong style={{ color: remainingAmount > 0 ? '#f87171' : '#34d399' }}>
-                    {remainingAmount} ر.س
+                  <strong>
+                    {userRole === 'admin' || permissions?.can_view_financials !== false ? (
+                      <span style={{ color: remainingAmount > 0 ? '#f87171' : '#34d399' }}>
+                        {remainingAmount} ر.س
+                      </span>
+                    ) : (
+                      <span style={{ color: '#94a3b8' }}>*** 🔒</span>
+                    )}
                   </strong>
                 </div>
 
@@ -460,7 +471,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 </select>
               </div>
 
-              {/* Simple Payment & Extension Actions: [كاش] أو [سداد] أو [سند القبض] + [🔄 تمديد] */}
+              {/* Simple Payment & Extension Actions */}
               <div style={{
                 display: 'flex',
                 gap: '10px',
@@ -470,74 +481,84 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 {isPaid ? (
                   /* When Paid: Show Receipt PDF Button + Extend Option */
                   <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
-                    <button
-                      onClick={() => onOpenReceipt(contract)}
-                      className="btn-emerald"
-                      style={{ flex: 1, padding: '9px 12px', fontSize: '0.85rem', justifyContent: 'center' }}
-                    >
-                      <ReceiptIcon size={16} />
-                      <span>📄 سند القبض</span>
-                    </button>
+                    {(userRole === 'admin' || permissions?.can_collect_payments !== false) && (
+                      <button
+                        onClick={() => onOpenReceipt(contract)}
+                        className="btn-emerald"
+                        style={{ flex: 1, padding: '9px 12px', fontSize: '0.85rem', justifyContent: 'center' }}
+                      >
+                        <ReceiptIcon size={16} />
+                        <span>📄 سند القبض</span>
+                      </button>
+                    )}
 
-                    <button
-                      onClick={() => onOpenExtendModal(contract)}
-                      className="btn-secondary"
-                      style={{ padding: '9px 14px', fontSize: '0.85rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
-                      title="تمديد العقد لفترة إضافية"
-                    >
-                      <RotateCw size={15} />
-                      <span>🔄 تمديد</span>
-                    </button>
+                    {(userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
+                      <button
+                        onClick={() => onOpenExtendModal(contract)}
+                        className="btn-secondary"
+                        style={{ padding: '9px 14px', fontSize: '0.85rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                        title="تمديد العقد لفترة إضافية"
+                      >
+                        <RotateCw size={15} />
+                        <span>🔄 تمديد</span>
+                      </button>
+                    )}
                   </div>
                 ) : (
-                  /* When Unpaid: 2 Clean Direct Options only: [كاش] | [سداد] */
+                  /* When Unpaid: Clean Direct Options based on permissions */
                   <>
                     {/* Option 1: Cash */}
-                    <button
-                      onClick={() => handleCashClick(contract)}
-                      disabled={loadingActionId === `cash-${contract.id}`}
-                      className="btn-emerald"
-                      style={{
-                        flex: 1,
-                        padding: '9px 12px',
-                        fontSize: '0.88rem',
-                        fontWeight: 800,
-                        justifyContent: 'center',
-                        background: 'linear-gradient(135deg, #10b981, #059669)'
-                      }}
-                    >
-                      <Banknote size={17} />
-                      <span>{loadingActionId === `cash-${contract.id}` ? 'جارٍ السداد...' : '💵 كاش'}</span>
-                    </button>
+                    {(userRole === 'admin' || permissions?.can_collect_payments !== false) && (
+                      <button
+                        onClick={() => handleCashClick(contract)}
+                        disabled={loadingActionId === `cash-${contract.id}`}
+                        className="btn-emerald"
+                        style={{
+                          flex: 1,
+                          padding: '9px 12px',
+                          fontSize: '0.88rem',
+                          fontWeight: 800,
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, #10b981, #059669)'
+                        }}
+                      >
+                        <Banknote size={17} />
+                        <span>{loadingActionId === `cash-${contract.id}` ? 'جارٍ السداد...' : '💵 كاش'}</span>
+                      </button>
+                    )}
 
                     {/* Option 2: Sadad Electronic Link */}
-                    <button
-                      onClick={() => handleSadadClick(contract)}
-                      disabled={loadingActionId === `sadad-${contract.id}`}
-                      className="btn-primary"
-                      style={{
-                        flex: 1,
-                        padding: '9px 12px',
-                        fontSize: '0.88rem',
-                        fontWeight: 800,
-                        justifyContent: 'center',
-                        background: 'linear-gradient(135deg, #f59e0b, #d97706)'
-                      }}
-                      title="إرسال رابط سداد إلكتروني مع Apple Pay ومدى بالواتساب"
-                    >
-                      <CreditCard size={17} />
-                      <span>{loadingActionId === `sadad-${contract.id}` ? 'جارٍ الإرسال...' : '💳 سداد'}</span>
-                    </button>
+                    {(userRole === 'admin' || permissions?.can_send_payment_links !== false) && (
+                      <button
+                        onClick={() => handleSadadClick(contract)}
+                        disabled={loadingActionId === `sadad-${contract.id}`}
+                        className="btn-primary"
+                        style={{
+                          flex: 1,
+                          padding: '9px 12px',
+                          fontSize: '0.88rem',
+                          fontWeight: 800,
+                          justifyContent: 'center',
+                          background: 'linear-gradient(135deg, #f59e0b, #d97706)'
+                        }}
+                        title="إرسال رابط سداد إلكتروني مع Apple Pay ومدى بالواتساب"
+                      >
+                        <CreditCard size={17} />
+                        <span>{loadingActionId === `sadad-${contract.id}` ? 'جارٍ الإرسال...' : '💳 سداد'}</span>
+                      </button>
+                    )}
 
                     {/* Option 3: Extend */}
-                    <button
-                      onClick={() => onOpenExtendModal(contract)}
-                      className="btn-secondary"
-                      style={{ padding: '9px 12px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
-                      title="تمديد العقد"
-                    >
-                      <RotateCw size={16} />
-                    </button>
+                    {(userRole === 'admin' || permissions?.can_extend_contracts !== false) && (
+                      <button
+                        onClick={() => onOpenExtendModal(contract)}
+                        className="btn-secondary"
+                        style={{ padding: '9px 12px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                        title="تمديد العقد"
+                      >
+                        <RotateCw size={16} />
+                      </button>
+                    )}
                   </>
                 )}
               </div>

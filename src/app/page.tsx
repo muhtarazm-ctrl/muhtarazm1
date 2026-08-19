@@ -17,7 +17,8 @@ import {
   PaymentSettings as IPaymentSettings,
   Receipt,
   PaymentMethod,
-  PaymentStatus
+  PaymentStatus,
+  StaffPermissions
 } from '@/types/database';
 import { SplashIntro } from '@/components/SplashIntro';
 import { Navbar } from '@/components/Navbar';
@@ -25,7 +26,7 @@ import { SmartSearch } from '@/components/SmartSearch';
 import { ContainersView } from '@/components/ContainersView';
 import { ContractsView } from '@/components/ContractsView';
 import { WhatsAppHub } from '@/components/WhatsAppHub';
-import { StaffManagement } from '@/components/StaffManagement';
+import { StaffManagement, DEFAULT_DRIVER_PERMISSIONS, DEFAULT_STAFF_PERMISSIONS } from '@/components/StaffManagement';
 import { WhatsAppSettings } from '@/components/WhatsAppSettings';
 import { PaymentSettings } from '@/components/PaymentSettings';
 import { NewContractModal } from '@/components/NewContractModal';
@@ -43,6 +44,16 @@ const initialStaff: Profile[] = [
     role: 'admin',
     is_active: true,
     can_view_all_records: true,
+    permissions: {
+      can_view_all_contracts: true,
+      can_view_financials: true,
+      can_create_contracts: true,
+      can_extend_contracts: true,
+      can_collect_payments: true,
+      can_send_payment_links: true,
+      can_manage_inventory: true,
+      can_send_whatsapp: true
+    },
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -54,6 +65,7 @@ const initialStaff: Profile[] = [
     role: 'employee',
     is_active: true,
     can_view_all_records: false,
+    permissions: DEFAULT_DRIVER_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -65,6 +77,7 @@ const initialStaff: Profile[] = [
     role: 'employee',
     is_active: true,
     can_view_all_records: true,
+    permissions: DEFAULT_STAFF_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -75,7 +88,8 @@ const initialStaff: Profile[] = [
     phone: '+966550000003',
     role: 'employee',
     is_active: true,
-    can_view_all_records: true,
+    can_view_all_records: false,
+    permissions: DEFAULT_DRIVER_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   },
@@ -87,6 +101,7 @@ const initialStaff: Profile[] = [
     role: 'employee',
     is_active: true,
     can_view_all_records: true,
+    permissions: DEFAULT_STAFF_PERMISSIONS,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString()
   }
@@ -259,9 +274,35 @@ export default function Home() {
   const [notifications, setNotifications] = useState<NotificationLog[]>(initialNotifications);
   const [inAppNotifications, setInAppNotifications] = useState<InAppNotification[]>(initialInAppNotifications);
   const [staffList, setStaffList] = useState<Profile[]>(initialStaff);
+  const [selectedStaffId, setSelectedStaffId] = useState<string>('staff-3'); // Default to field driver
   const [gatewaySettings, setGatewaySettings] = useState<IWhatsAppSettings>(initialGatewaySettings);
   const [paymentSettings, setPaymentSettings] = useState<IPaymentSettings>(initialPaymentSettings);
   const [receipts, setReceipts] = useState<Receipt[]>([]);
+
+  // Calculate active permissions based on role and selected employee
+  const currentStaff = staffList.find(s => s.id === selectedStaffId) || staffList.find(s => s.role !== 'admin');
+  const activePermissions: StaffPermissions = currentRole === 'admin'
+    ? {
+        can_view_all_contracts: true,
+        can_view_financials: true,
+        can_create_contracts: true,
+        can_extend_contracts: true,
+        can_collect_payments: true,
+        can_send_payment_links: true,
+        can_manage_inventory: true,
+        can_send_whatsapp: true
+      }
+    : (currentStaff?.permissions || (currentStaff?.full_name?.includes('سائق') ? DEFAULT_DRIVER_PERMISSIONS : DEFAULT_STAFF_PERMISSIONS));
+
+  // Filter contracts if employee doesn't have can_view_all_contracts
+  const displayedContracts = contracts.filter(c => {
+    if (currentRole === 'admin' || activePermissions.can_view_all_contracts) return true;
+    if (!currentStaff) return true;
+    const staffFirstName = currentStaff.full_name?.split(' ')[0] || '';
+    return c.assigned_employee_id === currentStaff.id || 
+           c.assigned_employee?.id === currentStaff.id || 
+           (c.assigned_employee?.full_name && staffFirstName && c.assigned_employee.full_name.includes(staffFirstName));
+  });
 
   // Modal State
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
@@ -971,6 +1012,7 @@ export default function Home() {
       role: 'employee',
       is_active: true,
       can_view_all_records: staffData.can_view_all_records ?? true,
+      permissions: staffData.permissions,
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString()
     };
@@ -983,8 +1025,33 @@ export default function Home() {
     setStaffList(prev => prev.map(p => p.id === profileId ? { ...p, is_active: !currentActive } : p));
   };
 
-  const handleToggleStaffViewAll = async (profileId: string, currentViewAll: boolean) => {
-    setStaffList(prev => prev.map(p => p.id === profileId ? { ...p, can_view_all_records: !currentViewAll } : p));
+  const handleUpdateStaffPermissions = async (profileId: string, permissions: StaffPermissions) => {
+    setStaffList(prev => prev.map(p => p.id === profileId ? {
+      ...p,
+      permissions,
+      can_view_all_records: permissions.can_view_all_contracts
+    } : p));
+
+    // In-app notification
+    const staffMember = staffList.find(s => s.id === profileId);
+    const inAppNotif: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      title: `🛡️ تحديث صلاحيات (${staffMember?.full_name || 'موظف'})`,
+      message: `تم تحديث مصفوفة الصلاحيات الميدانية والمالية بنجاح.`,
+      type: 'system_alert',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [inAppNotif, ...prev]);
+
+    try {
+      await supabase.from('profiles').update({
+        permissions,
+        can_view_all_records: permissions.can_view_all_contracts
+      }).eq('id', profileId);
+    } catch (err) {
+      console.warn('Synced permissions locally:', err);
+    }
   };
 
   const handleDeleteStaff = async (profileId: string) => {
@@ -1003,12 +1070,16 @@ export default function Home() {
         <SplashIntro onComplete={() => setShowSplash(false)} />
       )}
 
-      {/* 2. Top Navigation Bar with 🔔 In-App Notification Bell */}
+      {/* 2. Top Navigation Bar with 🔔 In-App Notification Bell & Active Employee Selector */}
       <Navbar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
         currentRole={currentRole}
         setCurrentRole={setCurrentRole}
+        staffList={staffList}
+        selectedStaffId={selectedStaffId}
+        setSelectedStaffId={setSelectedStaffId}
+        permissions={activePermissions}
         onReplayIntro={() => setShowSplash(true)}
         onOpenNewContract={() => {
           setPreSelectedContainerId(undefined);
@@ -1032,9 +1103,11 @@ export default function Home() {
         {currentTab === 'search' && (
           <SmartSearch
             containers={containers}
-            contracts={contracts}
+            contracts={displayedContracts}
             customers={customers}
             notifications={notifications}
+            userRole={currentRole}
+            permissions={activePermissions}
             onOpenNewContractWithContainer={(cId) => {
               setPreSelectedContainerId(cId);
               setIsContractModalOpen(true);
@@ -1050,8 +1123,9 @@ export default function Home() {
         {currentTab === 'containers' && (
           <ContainersView
             containers={containers}
-            contracts={contracts}
+            contracts={displayedContracts}
             userRole={currentRole}
+            permissions={activePermissions}
             onUpdateStatus={handleUpdateContainerStatus}
             onAddContainer={handleAddContainer}
             onDeleteContainer={handleDeleteContainer}
@@ -1065,9 +1139,10 @@ export default function Home() {
 
         {currentTab === 'contracts' && (
           <ContractsView
-            contracts={contracts}
+            contracts={displayedContracts}
             userRole={currentRole}
             paymentSettings={paymentSettings}
+            permissions={activePermissions}
             onUpdateContractStatus={handleUpdateContractStatus}
             onDeleteContract={handleDeleteContract}
             onSendWhatsApp={handleSendWhatsApp}
@@ -1107,7 +1182,7 @@ export default function Home() {
             staffList={staffList}
             onAddStaff={handleAddStaff}
             onToggleStatus={handleToggleStaffStatus}
-            onToggleViewAll={handleToggleStaffViewAll}
+            onUpdatePermissions={handleUpdateStaffPermissions}
             onDeleteStaff={handleDeleteStaff}
           />
         )}

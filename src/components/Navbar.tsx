@@ -15,7 +15,7 @@ import {
   CreditCard,
   Package
 } from 'lucide-react';
-import { InAppNotification, UserRole } from '@/types/database';
+import { InAppNotification, Profile, StaffPermissions, UserRole } from '@/types/database';
 import { NotificationBell } from './NotificationBell';
 
 interface NavbarProps {
@@ -23,6 +23,10 @@ interface NavbarProps {
   setCurrentTab: (tab: string) => void;
   currentRole: UserRole;
   setCurrentRole: (role: UserRole) => void;
+  staffList?: Profile[];
+  selectedStaffId?: string;
+  setSelectedStaffId?: (id: string) => void;
+  permissions?: StaffPermissions;
   onReplayIntro: () => void;
   onOpenNewContract: () => void;
   inAppNotifications: InAppNotification[];
@@ -37,6 +41,10 @@ export const Navbar: React.FC<NavbarProps> = ({
   setCurrentTab,
   currentRole,
   setCurrentRole,
+  staffList = [],
+  selectedStaffId,
+  setSelectedStaffId,
+  permissions,
   onReplayIntro,
   onOpenNewContract,
   inAppNotifications,
@@ -292,15 +300,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             onSelectContract={onSelectContract}
           />
 
-          <button
-            id="btn-open-new-contract"
-            className="btn-primary"
-            onClick={onOpenNewContract}
-            style={{ padding: '9px 18px', fontSize: '0.9rem' }}
-          >
-            <PlusCircle size={18} />
-            <span>عقد جديد</span>
-          </button>
+          {/* New Contract Button (Admin or if has create contract permission) */}
+          {(currentRole === 'admin' || permissions?.can_create_contracts !== false) && (
+            <button
+              id="btn-open-new-contract"
+              className="btn-primary"
+              onClick={onOpenNewContract}
+              style={{ padding: '9px 18px', fontSize: '0.9rem' }}
+            >
+              <PlusCircle size={18} />
+              <span>عقد جديد</span>
+            </button>
+          )}
 
           {/* Role Switcher for preview / auth */}
           <div style={{
@@ -353,6 +364,32 @@ export const Navbar: React.FC<NavbarProps> = ({
               <span>موظف</span>
             </button>
           </div>
+
+          {/* If Employee Role: Show Active Staff Selector Dropdown */}
+          {currentRole === 'employee' && staffList.length > 0 && setSelectedStaffId && (
+            <select
+              value={selectedStaffId}
+              onChange={(e) => setSelectedStaffId(e.target.value)}
+              style={{
+                background: '#0f172a',
+                color: '#38bdf8',
+                border: '1px solid rgba(56, 189, 248, 0.3)',
+                borderRadius: '8px',
+                padding: '5px 8px',
+                fontSize: '0.78rem',
+                fontFamily: 'inherit',
+                fontWeight: 700,
+                cursor: 'pointer'
+              }}
+              title="تحديد حساب الموظف / السائق لمعاينة صلاحياته الميدانية"
+            >
+              {staffList.filter(s => s.role !== 'admin').map(s => (
+                <option key={s.id} value={s.id}>
+                  👤 {s.full_name}
+                </option>
+              ))}
+            </select>
+          )}
 
           {/* Replay Intro Button */}
           <button
