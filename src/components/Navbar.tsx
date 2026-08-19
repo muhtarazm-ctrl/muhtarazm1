@@ -12,7 +12,8 @@ import {
   ShieldCheck,
   UserCheck
 } from 'lucide-react';
-import { UserRole } from '@/types/database';
+import { InAppNotification, UserRole } from '@/types/database';
+import { NotificationBell } from './NotificationBell';
 
 interface NavbarProps {
   currentTab: string;
@@ -21,6 +22,11 @@ interface NavbarProps {
   setCurrentRole: (role: UserRole) => void;
   onReplayIntro: () => void;
   onOpenNewContract: () => void;
+  inAppNotifications: InAppNotification[];
+  onMarkInAppAsRead: (id: string) => void;
+  onMarkAllInAppAsRead: () => void;
+  onClearAllInApp: () => void;
+  onSelectContract: (contractId: string) => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -30,6 +36,11 @@ export const Navbar: React.FC<NavbarProps> = ({
   setCurrentRole,
   onReplayIntro,
   onOpenNewContract,
+  inAppNotifications,
+  onMarkInAppAsRead,
+  onMarkAllInAppAsRead,
+  onClearAllInApp,
+  onSelectContract,
 }) => {
   return (
     <header style={{
@@ -195,8 +206,18 @@ export const Navbar: React.FC<NavbarProps> = ({
           )}
         </nav>
 
-        {/* Right Actions: New Contract Button & Role Switcher */}
+        {/* Right Actions: In-App Bell, New Contract, Role Switcher, Replay Intro */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+          
+          {/* 🔔 In-App Notification Bell Component */}
+          <NotificationBell
+            notifications={inAppNotifications}
+            onMarkAsRead={onMarkInAppAsRead}
+            onMarkAllAsRead={onMarkAllInAppAsRead}
+            onClearAll={onClearAllInApp}
+            onSelectContract={onSelectContract}
+          />
+
           <button
             id="btn-open-new-contract"
             className="btn-primary"

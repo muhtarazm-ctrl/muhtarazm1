@@ -103,3 +103,22 @@ export interface NotificationLog {
   // Joined field
   contract?: Contract;
 }
+
+// In-App Internal Notification Types
+export type InAppNotificationType =
+  | 'contract_expiry_soon'
+  | 'contract_created'
+  | 'container_status_change'
+  | 'payment_alert'
+  | 'system_alert';
+
+export interface InAppNotification {
+  id: string;
+  user_id?: string;
+  contract_id?: string;
+  title: string;
+  message: string;
+  type: InAppNotificationType;
+  is_read: boolean;
+  created_at: string;
+}

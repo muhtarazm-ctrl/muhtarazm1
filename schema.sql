@@ -354,7 +354,64 @@ CREATE TRIGGER tr_schedule_contract_whatsapp
     EXECUTE FUNCTION public.schedule_contract_whatsapp_notifications();
 
 -- ==============================================================================
--- 10. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
+-- 10. جدول notifications (نظام الإشعارات والتنبيهات الداخلية في التطبيق In-App)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE, -- الموظف المستهدف (أو NULL إذا كان إشعاراً عاماً للمدراء وكافة الفريق)
+    contract_id UUID REFERENCES public.contracts(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,                                         -- عنوان التنبيه (مثال: موعد سحب وشيك، عقد جديد)
+    message TEXT NOT NULL,                                       -- نص التنبيه التفصيلي
+    type TEXT NOT NULL CHECK (type IN (
+        'contract_expiry_soon',      -- تنبيه بقرب موعد انتهاء وسحب الحاوية
+        'contract_created',          -- إشعار تسجيل عقد جديد
+        'container_status_change',   -- إشعار بتغيير حالة الحاوية (صيانة، تأجير)
+        'payment_alert',             -- إشعار سداد أو مبالغ متبقية
+        'system_alert'               -- تنبيه عام من النظام أو الإدارة
+    )),
+    is_read BOOLEAN NOT NULL DEFAULT false,                      -- حالة القراءة
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.notifications IS 'جدول الإشعارات والتنبيهات الداخلية في التطبيق مع جرس الإشعارات';
+
+CREATE INDEX IF NOT EXISTS idx_inapp_notifs_user ON public.notifications(user_id, is_read);
+CREATE INDEX IF NOT EXISTS idx_inapp_notifs_created ON public.notifications(created_at DESC);
+
+-- زناد لإصدار إشعار داخلي فوري للمدير والموظف عند تسجيل أي عقد جديد
+CREATE OR REPLACE FUNCTION public.trigger_inapp_notification_on_contract()
+RETURNS TRIGGER AS $$
+DECLARE
+    v_cust_name TEXT;
+    v_cont_num TEXT;
+BEGIN
+    SELECT name INTO v_cust_name FROM public.customers WHERE id = NEW.customer_id;
+    SELECT container_number INTO v_cont_num FROM public.containers WHERE id = NEW.container_id;
+
+    -- إشعار تسجيل العقد الجديد
+    INSERT INTO public.notifications (
+        user_id, contract_id, title, message, type, is_read
+    ) VALUES (
+        NEW.assigned_employee_id,
+        NEW.id,
+        '📝 تم توثيق عقد جديد (' || NEW.contract_number || ')',
+        'تم تسجيل عقد جديد للعميل ' || COALESCE(v_cust_name, 'عميل') || ' بالحاوية (' || COALESCE(v_cont_num, '-') || ').',
+        'contract_created',
+        false
+    );
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+DROP TRIGGER IF EXISTS tr_inapp_notif_contract ON public.contracts;
+CREATE TRIGGER tr_inapp_notif_contract
+    AFTER INSERT ON public.contracts
+    FOR EACH ROW
+    EXECUTE FUNCTION public.trigger_inapp_notification_on_contract();
+
+-- ==============================================================================
+-- 11. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
 -- ==============================================================================
 
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -362,6 +419,7 @@ ALTER TABLE public.containers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
 -- دالة مساعدة لمعرفة هل المستخدم الحالي مدير (Admin)
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -388,18 +446,15 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ------------------------------------------------------------------------------
 -- سياسات جدول profiles (المستخدمون والموظفون)
 -- ------------------------------------------------------------------------------
--- 1. المدير له الصلاحية المطلقة لإضافة، تعديل، حذف، وتغيير صلاحيات الموظفين
 CREATE POLICY "Admins full control on profiles"
     ON public.profiles FOR ALL
     USING (public.is_admin())
     WITH CHECK (public.is_admin());
 
--- 2. الموظف يستطيع قراءة ملفه الشخصي وقائمة الموظفين
 CREATE POLICY "Staff can view profiles"
     ON public.profiles FOR SELECT
     USING (public.is_active_staff());
 
--- 3. الموظف يستطيع تحديث بياناته الشخصية الأساسية فقط
 CREATE POLICY "Staff can update own profile"
     ON public.profiles FOR UPDATE
     USING (auth.uid() = id AND public.is_active_staff())
@@ -408,7 +463,6 @@ CREATE POLICY "Staff can update own profile"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول containers (الحاويات)
 -- ------------------------------------------------------------------------------
--- الموظفون النشطون يمكنهم القراءة والإضافة وتحديث الحالة (متاحة، مؤجرة، صيانة)
 CREATE POLICY "Staff can view containers"
     ON public.containers FOR SELECT
     USING (public.is_active_staff());
@@ -422,7 +476,6 @@ CREATE POLICY "Staff can update containers"
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
--- الحذف متاح حصرياً للمدير فقط
 CREATE POLICY "Admins only can delete containers"
     ON public.containers FOR DELETE
     USING (public.is_admin());
@@ -443,7 +496,6 @@ CREATE POLICY "Staff can update customers"
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
--- الحذف متاح للمدير فقط
 CREATE POLICY "Admins only can delete customers"
     ON public.customers FOR DELETE
     USING (public.is_admin());
@@ -451,7 +503,6 @@ CREATE POLICY "Admins only can delete customers"
 -- ------------------------------------------------------------------------------
 -- سياسات جدول contracts (العقود)
 -- ------------------------------------------------------------------------------
--- الموظف يرى السجلات (الكل أو المسندة إليه)، ويدخل ويعدل
 CREATE POLICY "Staff can view contracts"
     ON public.contracts FOR SELECT
     USING (
@@ -473,35 +524,62 @@ CREATE POLICY "Staff can update contracts"
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
--- الحذف محصور للمدير فقط
 CREATE POLICY "Admins only can delete contracts"
     ON public.contracts FOR DELETE
     USING (public.is_admin());
 
 -- ------------------------------------------------------------------------------
--- سياسات جدول notification_logs (سجل التنبيهات)
+-- سياسات جدول notification_logs (سجل تنبيهات الواتساب)
 -- ------------------------------------------------------------------------------
-CREATE POLICY "Staff can view notifications"
+CREATE POLICY "Staff can view notifications logs"
     ON public.notification_logs FOR SELECT
     USING (public.is_active_staff());
 
-CREATE POLICY "Staff can insert and update notifications"
+CREATE POLICY "Staff can insert and update notifications logs"
     ON public.notification_logs FOR INSERT
     WITH CHECK (public.is_active_staff());
 
-CREATE POLICY "Staff can update notifications status"
+CREATE POLICY "Staff can update notifications logs status"
     ON public.notification_logs FOR UPDATE
     USING (public.is_active_staff())
     WITH CHECK (public.is_active_staff());
 
-CREATE POLICY "Admins only can delete notifications"
+CREATE POLICY "Admins only can delete notifications logs"
     ON public.notification_logs FOR DELETE
     USING (public.is_admin());
 
+-- ------------------------------------------------------------------------------
+-- سياسات جدول notifications (الإشعارات الداخلية In-App)
+-- ------------------------------------------------------------------------------
+CREATE POLICY "Staff can view in-app notifications"
+    ON public.notifications FOR SELECT
+    USING (
+        public.is_admin() OR 
+        (public.is_active_staff() AND (user_id IS NULL OR user_id = auth.uid()))
+    );
+
+CREATE POLICY "Staff can update read status on in-app notifications"
+    ON public.notifications FOR UPDATE
+    USING (
+        public.is_admin() OR 
+        (public.is_active_staff() AND (user_id IS NULL OR user_id = auth.uid()))
+    )
+    WITH CHECK (
+        public.is_admin() OR 
+        (public.is_active_staff() AND (user_id IS NULL OR user_id = auth.uid()))
+    );
+
+CREATE POLICY "Staff can insert in-app notifications"
+    ON public.notifications FOR INSERT
+    WITH CHECK (public.is_active_staff());
+
+CREATE POLICY "Admins only can delete in-app notifications"
+    ON public.notifications FOR DELETE
+    USING (public.is_admin());
+
 -- ==============================================================================
--- 11. بيانات تجريبية أولية (Seed Data)
+-- 12. بيانات تجريبية أولية (Seed Data)
 -- ==============================================================================
--- إضافة حاويات تجريبية من النوعين فقط (تجاري وأنقاض)
 INSERT INTO public.containers (container_number, type, status, daily_rate, monthly_rate, notes)
 VALUES 
     ('C-101', 'commercial', 'available', 0.00, 3500.00, 'حاوية تجارية مغلقة للمستودعات والشركات'),
@@ -510,3 +588,11 @@ VALUES
     ('D-202', 'debris', 'available', 150.00, 0.00, 'حاوية أنقاض للمشاريع والمقاولات'),
     ('D-203', 'debris', 'available', 150.00, 0.00, 'حاوية أنقاض ومخلفات يومية')
 ON CONFLICT (container_number) DO NOTHING;
+
+-- إضافة إشعارات داخلية أولية تجريبية
+INSERT INTO public.notifications (title, message, type, is_read)
+VALUES 
+    ('⚠️ تنبيه موعد سحب وشيك (خلال 4 ساعات)', 'حاوية الأنقاض رقم (D-202) بالملقا تستحق السحب اليوم الساعة 4:00 عصراً.', 'contract_expiry_soon', false),
+    ('📅 تنبيه تجديد عقد تجاري (قبل 5 أيام)', 'عقد الحاوية التجارية (CTR-2026-001) لمؤسسة صروح البناء شارف على الانتهاء.', 'contract_expiry_soon', false),
+    ('✨ جاهزية النظام', 'تم ربط وتشغيل محرك الإشعارات الداخلية وأنظمة المتابعة اللحظية بنجاح.', 'system_alert', true);
+

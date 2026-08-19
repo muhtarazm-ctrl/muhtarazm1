@@ -3,7 +3,17 @@
 import React, { useState, useEffect } from 'react';
 import confetti from 'canvas-confetti';
 import { supabase } from '@/lib/supabase';
-import { Container, Contract, Customer, NotificationLog, Profile, UserRole, ContainerStatus, ContractStatus } from '@/types/database';
+import { 
+  Container, 
+  Contract, 
+  Customer, 
+  NotificationLog, 
+  Profile, 
+  UserRole, 
+  ContainerStatus, 
+  ContractStatus,
+  InAppNotification
+} from '@/types/database';
 import { SplashIntro } from '@/components/SplashIntro';
 import { Navbar } from '@/components/Navbar';
 import { SmartSearch } from '@/components/SmartSearch';
@@ -13,7 +23,7 @@ import { WhatsAppHub } from '@/components/WhatsAppHub';
 import { StaffManagement } from '@/components/StaffManagement';
 import { NewContractModal } from '@/components/NewContractModal';
 
-// Sample Seed Data in case Supabase is fresh or connecting
+// Sample Seed Data
 const initialContainers: Container[] = [
   { id: '1', container_number: 'C-101', type: 'commercial', status: 'available', daily_rate: 0, monthly_rate: 3500, notes: 'حاوية تجارية مغلقة للمستودعات والشركات', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
   { id: '2', container_number: 'C-102', type: 'commercial', status: 'rented', daily_rate: 0, monthly_rate: 3500, notes: 'مؤجرة لدى مجمع تجاري بالرياض', created_at: new Date().toISOString(), updated_at: new Date().toISOString() },
@@ -109,6 +119,36 @@ const initialNotifications: NotificationLog[] = [
   }
 ];
 
+// Initial in-app notifications
+const initialInAppNotifications: InAppNotification[] = [
+  {
+    id: 'inapp-1',
+    contract_id: 'cnt-2',
+    title: '⚠️ تنبيه موعد سحب وشيك (خلال 4 ساعات)',
+    message: 'حاوية الأنقاض رقم (D-202) بالملقا تستحق السحب اليوم الساعة 4:00 عصراً.',
+    type: 'contract_expiry_soon',
+    is_read: false,
+    created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString() // 15 mins ago
+  },
+  {
+    id: 'inapp-2',
+    contract_id: 'cnt-1',
+    title: '📅 تنبيه تجديد عقد تجاري (قبل 5 أيام)',
+    message: 'عقد الحاوية التجارية (CTR-2026-001) لمؤسسة صروح البناء شارف على الانتهاء.',
+    type: 'contract_expiry_soon',
+    is_read: false,
+    created_at: new Date(Date.now() - 2 * 3600 * 1000).toISOString() // 2 hours ago
+  },
+  {
+    id: 'inapp-3',
+    title: '✨ جاهزية النظام والربط اللحظي',
+    message: 'تم تفعيل محرك الإشعارات الداخلية وتنبيهات العقود والعمليات بنجاح.',
+    type: 'system_alert',
+    is_read: true,
+    created_at: new Date(Date.now() - 24 * 3600 * 1000).toISOString() // 1 day ago
+  }
+];
+
 const initialStaff: Profile[] = [
   {
     id: 'staff-admin',
@@ -178,6 +218,7 @@ export default function Home() {
   const [contracts, setContracts] = useState<Contract[]>(initialContracts);
   const [customers, setCustomers] = useState<Customer[]>(initialCustomers);
   const [notifications, setNotifications] = useState<NotificationLog[]>(initialNotifications);
+  const [inAppNotifications, setInAppNotifications] = useState<InAppNotification[]>(initialInAppNotifications);
   const [staffList, setStaffList] = useState<Profile[]>(initialStaff);
 
   // Modal State
@@ -208,12 +249,17 @@ export default function Home() {
           setNotifications(dbNotifs);
         }
 
+        const { data: dbInApp } = await supabase.from('notifications').select('*').order('created_at', { ascending: false });
+        if (dbInApp && dbInApp.length > 0) {
+          setInAppNotifications(dbInApp);
+        }
+
         const { data: dbProfiles } = await supabase.from('profiles').select('*');
         if (dbProfiles && dbProfiles.length > 0) {
           setStaffList(dbProfiles);
         }
       } catch (err) {
-        console.warn('Supabase local sync initialized with default active state:', err);
+        console.warn('Supabase local sync initialized with active state:', err);
       }
     };
 
@@ -228,9 +274,55 @@ export default function Home() {
     window.open(url, '_blank');
   };
 
+  // In-App Notification Handlers
+  const handleMarkInAppAsRead = async (id: string) => {
+    setInAppNotifications(prev => prev.map(n => n.id === id ? { ...n, is_read: true } : n));
+    try {
+      await supabase.from('notifications').update({ is_read: true }).eq('id', id);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleMarkAllInAppAsRead = async () => {
+    setInAppNotifications(prev => prev.map(n => ({ ...n, is_read: true })));
+    try {
+      await supabase.from('notifications').update({ is_read: true }).neq('is_read', true);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleClearAllInApp = async () => {
+    setInAppNotifications([]);
+    try {
+      await supabase.from('notifications').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleSelectContractFromNotification = (contractId: string) => {
+    setCurrentTab('contracts');
+  };
+
   // Container Status Update Handler
   const handleUpdateContainerStatus = async (containerId: string, status: ContainerStatus) => {
+    const cont = containers.find(c => c.id === containerId);
     setContainers(prev => prev.map(c => c.id === containerId ? { ...c, status } : c));
+    
+    // Add in-app notification for container status change
+    const statusText = status === 'available' ? 'متاحة للتأجير' : status === 'rented' ? 'مؤجرة' : 'في الصيانة';
+    const statusNotif: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      title: `🚛 تحديث حالة حاوية (${cont?.container_number || '-'})`,
+      message: `تم تغيير حالة الحاوية إلى: ${statusText}.`,
+      type: 'container_status_change',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [statusNotif, ...prev]);
+
     try {
       await supabase.from('containers').update({ status }).eq('id', containerId);
     } catch (err) {
@@ -363,6 +455,18 @@ export default function Home() {
     };
     setNotifications(prev => [newNotif, ...prev]);
 
+    // 🔔 Auto-generate in-app notification with red badge
+    const newInApp: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      contract_id: newContract.id,
+      title: `📝 تم تسجيل عقد جديد (${newContract.contract_number})`,
+      message: `تم توثيق عقد جديد للعميل ${customerObj.name} بالحاوية (${containerObj?.container_number || '-'}).`,
+      type: 'contract_created',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [newInApp, ...prev]);
+
     // Trigger celebration confetti
     confetti({
       particleCount: 80,
@@ -447,7 +551,7 @@ export default function Home() {
         <SplashIntro onComplete={() => setShowSplash(false)} />
       )}
 
-      {/* 2. Top Navigation Bar */}
+      {/* 2. Top Navigation Bar with 🔔 In-App Notification Bell */}
       <Navbar
         currentTab={currentTab}
         setCurrentTab={setCurrentTab}
@@ -458,6 +562,11 @@ export default function Home() {
           setPreSelectedContainerId(undefined);
           setIsContractModalOpen(true);
         }}
+        inAppNotifications={inAppNotifications}
+        onMarkInAppAsRead={handleMarkInAppAsRead}
+        onMarkAllInAppAsRead={handleMarkAllInAppAsRead}
+        onClearAllInApp={handleClearAllInApp}
+        onSelectContract={handleSelectContractFromNotification}
       />
 
       {/* 3. Main Body Content */}
