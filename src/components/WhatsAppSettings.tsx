@@ -712,7 +712,7 @@ export const WhatsAppSettings: React.FC<WhatsAppSettingsProps> = ({
               مسح كود QR لربط واتساب
             </h3>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '20px' }}>
-              افتح تطبيق واتساب على هاتفك > الأجهزة المرتبطة > ربط جهاز، ثم امسح الكود أدناه:
+              افتح تطبيق واتساب على هاتفك &larr; الأجهزة المرتبطة &larr; ربط جهاز، ثم امسح الكود أدناه:
             </p>
 
             {/* Generated QR Box */}
