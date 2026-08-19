@@ -403,31 +403,56 @@ CREATE TRIGGER tr_inapp_notif_contract
     EXECUTE FUNCTION public.trigger_inapp_notification_on_contract();
 
 -- ==============================================================================
--- 11. جدول whatsapp_settings (إعدادات بوابة الواتساب الموحدة والربط الآلي)
+-- 12. جدول payment_settings (إعدادات بوابة الدفع الإلكتروني Moyasar)
 -- ==============================================================================
-CREATE TABLE IF NOT EXISTS public.whatsapp_settings (
+CREATE TABLE IF NOT EXISTS public.payment_settings (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    provider TEXT NOT NULL DEFAULT 'ultramsg' CHECK (provider IN ('ultramsg', 'wasapi', 'twilio', 'webhook', 'custom')),
-    instance_id TEXT,                                           -- معرف الجلسة (Instance ID)
-    api_token TEXT,                                             -- رمز الوصول السري (API Token)
-    api_url TEXT DEFAULT 'https://api.ultramsg.com',            -- رابط السيرفر / البوابة
-    sender_phone TEXT,                                          -- الرقم الموحد للمنشأة (مثال: +966920000000)
-    admin_phone TEXT,                                           -- رقم جوال المدير العام لاستلام التنبيهات التشغيلية
-    is_connected BOOLEAN NOT NULL DEFAULT false,                -- حالة الاتصال
-    auto_send_enabled BOOLEAN NOT NULL DEFAULT true,            -- تفعيل الإرسال التلقائي الصامت من السيرفر
+    is_enabled BOOLEAN NOT NULL DEFAULT true,                    -- تفعيل أو تعطيل بوابة الدفع الإلكتروني
+    publishable_key TEXT DEFAULT 'pk_test_muhtaraz_demo_key',    -- المفتاح العام
+    secret_key TEXT DEFAULT 'sk_test_muhtaraz_secret_key',       -- المفتاح السري
+    apple_pay_enabled BOOLEAN NOT NULL DEFAULT true,             -- تفعيل خيار Apple Pay
+    mada_enabled BOOLEAN NOT NULL DEFAULT true,                  -- تفعيل خيار مدى
+    credit_card_enabled BOOLEAN NOT NULL DEFAULT true,           -- تفعيل البطاقات الائتمانية
+    vat_number TEXT DEFAULT '300099887700003',                   -- الرقم الضريبي للمنشأة
+    company_commercial_reg TEXT DEFAULT '1010889900',            -- السجل التجاري
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-COMMENT ON TABLE public.whatsapp_settings IS 'جدول إعدادات ومفاتيح بوابة الواتساب الموحدة والإرسال الآلي';
+COMMENT ON TABLE public.payment_settings IS 'جدول إعدادات ومفاتيح بوابة الدفع الإلكتروني Moyasar';
 
-DROP TRIGGER IF EXISTS tr_whatsapp_settings_updated_at ON public.whatsapp_settings;
-CREATE TRIGGER tr_whatsapp_settings_updated_at
-    BEFORE UPDATE ON public.whatsapp_settings
+DROP TRIGGER IF EXISTS tr_payment_settings_updated_at ON public.payment_settings;
+CREATE TRIGGER tr_payment_settings_updated_at
+    BEFORE UPDATE ON public.payment_settings
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
 -- ==============================================================================
--- 12. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
+-- 13. جدول receipts (سندات القبض المالية الموثقة)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.receipts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    receipt_number TEXT UNIQUE NOT NULL,                        -- رقم السند (مثال: RCP-2026-001)
+    contract_id UUID NOT NULL REFERENCES public.contracts(id) ON DELETE CASCADE,
+    customer_id UUID NOT NULL REFERENCES public.customers(id) ON DELETE RESTRICT,
+    amount NUMERIC(10, 2) NOT NULL,                              -- المبلغ المقبوض
+    payment_method TEXT NOT NULL CHECK (payment_method IN (
+        'apple_pay', 'mada', 'credit_card', 'cash', 'pos', 'bank_transfer'
+    )),                                                          -- طريقة الدفع
+    transaction_ref TEXT,                                        -- الرقم المرجعي للعملية الإلكترونية أو البنكية
+    received_by_employee_id UUID REFERENCES public.profiles(id) ON DELETE SET NULL, -- الموظف/السائق المستلم
+    notes TEXT,                                                  -- ملاحظات السند
+    issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.receipts IS 'جدول سندات القبض الإلكترونية والنقدية الموثقة مع رمز التحقق QR';
+
+CREATE INDEX IF NOT EXISTS idx_receipts_contract ON public.receipts(contract_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_customer ON public.receipts(customer_id);
+CREATE INDEX IF NOT EXISTS idx_receipts_number ON public.receipts(receipt_number);
+
+-- ==============================================================================
+-- 14. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
 -- تم استخدام DROP POLICY IF EXISTS قبل كل سياسة لضمان قابلية إعادة التنفيذ دون أخطاء
 -- ==============================================================================
 
@@ -438,6 +463,8 @@ ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.whatsapp_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.receipts ENABLE ROW LEVEL SECURITY;
 
 -- دالة مساعدة لمعرفة هل المستخدم الحالي مدير (Admin)
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -632,8 +659,40 @@ CREATE POLICY "Staff can view whatsapp_settings"
     ON public.whatsapp_settings FOR SELECT
     USING (public.is_active_staff());
 
+-- ------------------------------------------------------------------------------
+-- سياسات جدول payment_settings (إعدادات بوابة الدفع - خاصة بالمدير فقط)
+-- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Admins full control on payment_settings" ON public.payment_settings;
+CREATE POLICY "Admins full control on payment_settings"
+    ON public.payment_settings FOR ALL
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Staff can view payment_settings" ON public.payment_settings;
+CREATE POLICY "Staff can view payment_settings"
+    ON public.payment_settings FOR SELECT
+    USING (public.is_active_staff());
+
+-- ------------------------------------------------------------------------------
+-- سياسات جدول receipts (سندات القبض)
+-- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Staff can view receipts" ON public.receipts;
+CREATE POLICY "Staff can view receipts"
+    ON public.receipts FOR SELECT
+    USING (public.is_active_staff());
+
+DROP POLICY IF EXISTS "Staff can insert receipts" ON public.receipts;
+CREATE POLICY "Staff can insert receipts"
+    ON public.receipts FOR INSERT
+    WITH CHECK (public.is_active_staff());
+
+DROP POLICY IF EXISTS "Admins only can delete receipts" ON public.receipts;
+CREATE POLICY "Admins only can delete receipts"
+    ON public.receipts FOR DELETE
+    USING (public.is_admin());
+
 -- ==============================================================================
--- 13. بيانات تجريبية أولية (Seed Data)
+-- 15. بيانات تجريبية أولية (Seed Data)
 -- ==============================================================================
 INSERT INTO public.containers (container_number, type, status, daily_rate, monthly_rate, notes)
 VALUES 
@@ -650,6 +709,12 @@ VALUES
     ('ultramsg', 'instance_muhtaraz_01', 'tok_muhtaraz_sec_9988', '+966920001234', '+966500000001', true, true)
 ON CONFLICT DO NOTHING;
 
+-- إعدادات بوابة الدفع Moyasar الافتراضية
+INSERT INTO public.payment_settings (is_enabled, publishable_key, secret_key, apple_pay_enabled, mada_enabled, credit_card_enabled)
+VALUES 
+    (true, 'pk_test_muhtaraz_demo_key', 'sk_test_muhtaraz_secret_key', true, true, true)
+ON CONFLICT DO NOTHING;
+
 -- إضافة إشعارات داخلية أولية تجريبية
 INSERT INTO public.notifications (title, message, type, is_read)
 VALUES 
@@ -657,4 +722,5 @@ VALUES
     ('📅 تنبيه تجديد عقد تجاري (قبل 5 أيام)', 'عقد الحاوية التجارية (CTR-2026-001) لمؤسسة صروح البناء شارف على الانتهاء.', 'contract_expiry_soon', false),
     ('✨ جاهزية النظام', 'تم ربط وتشغيل محرك الإشعارات الداخلية وأنظمة المتابعة اللحظية بنجاح.', 'system_alert', true)
 ON CONFLICT DO NOTHING;
+
 

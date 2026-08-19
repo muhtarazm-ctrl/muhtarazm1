@@ -13,28 +13,40 @@ import {
   AlertTriangle,
   Trash2,
   Phone,
-  DollarSign
+  DollarSign,
+  CreditCard,
+  Banknote,
+  Receipt as ReceiptIcon
 } from 'lucide-react';
-import { Contract, ContractStatus, UserRole } from '@/types/database';
+import { Contract, ContractStatus, UserRole, PaymentSettings } from '@/types/database';
 
 interface ContractsViewProps {
   contracts: Contract[];
   userRole: UserRole;
+  paymentSettings: PaymentSettings;
   onUpdateContractStatus: (contractId: string, status: ContractStatus) => Promise<void>;
   onDeleteContract: (contractId: string) => Promise<void>;
   onSendWhatsApp: (phone: string, message: string) => void;
+  onOpenReceipt: (contract: Contract) => void;
+  onOpenManualPayment: (contract: Contract) => void;
+  onSendInvoiceLink: (contract: Contract) => Promise<void>;
 }
 
 export const ContractsView: React.FC<ContractsViewProps> = ({
   contracts,
   userRole,
+  paymentSettings,
   onUpdateContractStatus,
   onDeleteContract,
-  onSendWhatsApp
+  onSendWhatsApp,
+  onOpenReceipt,
+  onOpenManualPayment,
+  onSendInvoiceLink
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'commercial' | 'debris'>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | ContractStatus>('all');
+  const [generatingInvoiceId, setGeneratingInvoiceId] = useState<string | null>(null);
 
   const filteredContracts = contracts.filter(c => {
     if (filterType !== 'all' && c.contract_type !== filterType) return false;
@@ -78,6 +90,12 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     return { text: `متبقي ${diffDays} يوماً`, color: '#94a3b8', isUrgent: false };
   };
 
+  const handleInvoiceClick = async (contract: Contract) => {
+    setGeneratingInvoiceId(contract.id);
+    await onSendInvoiceLink(contract);
+    setGeneratingInvoiceId(null);
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
@@ -85,10 +103,10 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-            سجل العقود والتأجير
+            سجل العقود والتأجير والتحصيل
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            متابعة العقود النشطة، مواعيد السحب والتجديد، وحالات الدفع
+            متابعة العقود، مواعيد السحب والتجديد، السداد الإلكتروني واليدوي، وطباعة سندات القبض
           </p>
         </div>
       </div>
@@ -102,101 +120,151 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
         flexWrap: 'wrap',
         gap: '14px'
       }}>
-        {/* Search */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flex: '1', minWidth: '240px' }}>
-          <Search size={18} color="#fbbf24" />
+        {/* Search Input */}
+        <div style={{ position: 'relative', flex: '1', minWidth: '260px' }}>
+          <Search size={18} color="#94a3b8" style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)' }} />
           <input
             type="text"
             className="form-input"
+            style={{ paddingRight: '40px' }}
+            placeholder="بحث برقم العقد، اسم العميل، الجوال، أو رقم الحاوية..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="بحث برقم العقد، اسم العميل، الجوال، أو رقم الحاوية..."
-            style={{ padding: '8px 12px', fontSize: '0.9rem' }}
           />
         </div>
 
-        {/* Filter Pills */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-          {[
-            { id: 'all', label: 'كل العقود' },
-            { id: 'debris', label: 'أنقاض (يومي)' },
-            { id: 'commercial', label: 'تجاري' }
-          ].map(f => (
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+          {/* Type Filter */}
+          <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <button
-              key={f.id}
-              onClick={() => setFilterType(f.id as any)}
+              onClick={() => setFilterType('all')}
               style={{
-                padding: '6px 14px',
+                padding: '6px 12px',
                 borderRadius: '8px',
-                border: '1px solid',
-                borderColor: filterType === f.id ? 'var(--accent-gold)' : 'transparent',
-                background: filterType === f.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                color: filterType === f.id ? '#fbbf24' : '#94a3b8',
+                border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 fontSize: '0.82rem',
-                fontWeight: 600
+                fontWeight: 700,
+                background: filterType === 'all' ? '#fbbf24' : 'transparent',
+                color: filterType === 'all' ? '#050811' : '#94a3b8'
               }}
             >
-              {f.label}
+              الكل ({contracts.length})
             </button>
-          ))}
+            <button
+              onClick={() => setFilterType('commercial')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: filterType === 'commercial' ? '#fbbf24' : 'transparent',
+                color: filterType === 'commercial' ? '#050811' : '#94a3b8'
+              }}
+            >
+              تجاري
+            </button>
+            <button
+              onClick={() => setFilterType('debris')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: filterType === 'debris' ? '#fbbf24' : 'transparent',
+                color: filterType === 'debris' ? '#050811' : '#94a3b8'
+              }}
+            >
+              أنقاض
+            </button>
+          </div>
+
+          {/* Status Filter */}
+          <select
+            className="form-select"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value as any)}
+            style={{ width: 'auto', padding: '7px 12px', fontSize: '0.82rem' }}
+          >
+            <option value="all">كافة الحالات</option>
+            <option value="active">العقود النشطة</option>
+            <option value="completed">المكتملة والمستلمة</option>
+            <option value="extended">الممددة</option>
+            <option value="cancelled">الملغاة</option>
+          </select>
         </div>
       </div>
 
-      {/* Contracts List */}
+      {/* Contracts Grid */}
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
         gap: '20px'
       }}>
-        {filteredContracts.map(contract => {
+        {filteredContracts.map((contract) => {
           const timing = calculateRemainingTimeText(contract);
+          const remainingAmount = Number(contract.remaining_amount ?? (contract.total_cost - contract.paid_amount));
+          const isPaid = remainingAmount <= 0 || contract.payment_status === 'paid';
 
           return (
-            <div 
-              key={contract.id} 
-              className="glass-panel glass-card-interactive"
+            <div
+              key={contract.id}
+              className="glass-panel"
               style={{
-                padding: '24px',
+                padding: '22px',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '14px',
-                borderRight: `4px solid ${contract.contract_type === 'commercial' ? '#6366f1' : '#f59e0b'}`
+                borderRight: `4px solid ${contract.contract_type === 'commercial' ? 'var(--accent-gold)' : '#38bdf8'}`
               }}
             >
-              {/* Header */}
+              {/* Header: Contract Number, Type, Delete */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#fbbf24' }}>
-                      عقد #{contract.contract_number}
+                    <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff' }}>
+                      {contract.contract_number}
                     </span>
-                    <span className={`badge ${contract.contract_type === 'commercial' ? 'badge-commercial' : 'badge-debris'}`}>
-                      {contract.contract_type === 'commercial' ? 'تجاري' : 'أنقاض (يومي)'}
+                    <span style={{
+                      padding: '2px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      background: contract.contract_type === 'commercial' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(56, 189, 248, 0.15)',
+                      color: contract.contract_type === 'commercial' ? '#fbbf24' : '#38bdf8',
+                      border: `1px solid ${contract.contract_type === 'commercial' ? 'rgba(245, 158, 11, 0.3)' : 'rgba(56, 189, 248, 0.3)'}`
+                    }}>
+                      {contract.contract_type === 'commercial' ? 'تجاري' : 'أنقاض يومي'}
                     </span>
                   </div>
-                  <div style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '2px' }}>
-                    حاوية: <strong style={{ color: '#ffffff' }}>{contract.container?.container_number || 'غير مسندة'}</strong>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                    حاوية: <strong style={{ color: '#ffffff' }}>{contract.container?.container_number || 'غير محددة'}</strong>
                   </div>
                 </div>
 
-                {/* Admin Delete */}
                 {userRole === 'admin' && (
                   <button
-                    title="حذف العقد (خاص بالمدير)"
+                    title="حذف العقد (للمدير)"
                     onClick={() => {
-                      if (confirm(`هل أنت متأكد من حذف العقد #${contract.contract_number}؟`)) {
+                      if (confirm(`هل أنت متأكد من حذف العقد (${contract.contract_number})؟`)) {
                         onDeleteContract(contract.id);
                       }
                     }}
                     style={{
-                      background: 'rgba(239, 68, 68, 0.1)',
-                      border: '1px solid rgba(239, 68, 68, 0.25)',
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
                       color: '#f87171',
-                      borderRadius: '8px',
                       width: '30px',
                       height: '30px',
+                      borderRadius: '8px',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -303,8 +371,8 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 </div>
                 <div>
                   <span style={{ color: '#94a3b8' }}>المتبقي:</span>{' '}
-                  <strong style={{ color: (contract.total_cost - contract.paid_amount) > 0 ? '#f87171' : '#34d399' }}>
-                    {(contract.total_cost - contract.paid_amount)} ر.س
+                  <strong style={{ color: remainingAmount > 0 ? '#f87171' : '#34d399' }}>
+                    {remainingAmount} ر.س
                   </strong>
                 </div>
 
@@ -328,6 +396,60 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                   <option value="extended">ممدد</option>
                   <option value="cancelled">ملغي</option>
                 </select>
+              </div>
+
+              {/* 💳 Payment Actions Bar */}
+              <div style={{
+                display: 'flex',
+                gap: '8px',
+                flexWrap: 'wrap',
+                paddingTop: '10px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                {isPaid ? (
+                  /* If Paid: Show PDF Receipt Button */
+                  <button
+                    onClick={() => onOpenReceipt(contract)}
+                    className="btn-emerald"
+                    style={{ flex: 1, padding: '7px 12px', fontSize: '0.82rem', justifyContent: 'center' }}
+                  >
+                    <ReceiptIcon size={15} />
+                    <span>📄 سند القبض (PDF)</span>
+                  </button>
+                ) : (
+                  /* If Unpaid: Show Electronic Invoice Link & Manual Payment Buttons */
+                  <>
+                    {paymentSettings.is_enabled && (
+                      <button
+                        onClick={() => handleInvoiceClick(contract)}
+                        disabled={generatingInvoiceId === contract.id}
+                        className="btn-primary"
+                        style={{ flex: 1, padding: '7px 10px', fontSize: '0.8rem', justifyContent: 'center' }}
+                        title="توليد رابط Moyasar مع Apple Pay ومدى وإرساله للعميل بالواتساب"
+                      >
+                        <CreditCard size={14} />
+                        <span>{generatingInvoiceId === contract.id ? 'جارٍ التوليد...' : '💳 رابط سداد إلكتروني'}</span>
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => onOpenManualPayment(contract)}
+                      className="btn-secondary"
+                      style={{
+                        flex: 1,
+                        padding: '7px 10px',
+                        fontSize: '0.8rem',
+                        justifyContent: 'center',
+                        background: 'rgba(16, 185, 129, 0.15)',
+                        border: '1px solid rgba(16, 185, 129, 0.3)',
+                        color: '#34d399'
+                      }}
+                    >
+                      <Banknote size={14} />
+                      <span>💵 تسجيل سداد نقدي</span>
+                    </button>
+                  </>
+                )}
               </div>
 
             </div>

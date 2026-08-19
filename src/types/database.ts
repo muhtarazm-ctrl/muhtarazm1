@@ -43,6 +43,7 @@ export interface Customer {
 export type ContractPeriodType = 'daily' | 'monthly' | 'semi_annual' | 'annual';
 export type ContractStatus = 'active' | 'completed' | 'cancelled' | 'extended';
 export type PaymentStatus = 'unpaid' | 'partially_paid' | 'paid';
+export type PaymentMethod = 'apple_pay' | 'mada' | 'credit_card' | 'cash' | 'pos' | 'bank_transfer';
 
 export interface Contract {
   id: string;
@@ -63,6 +64,8 @@ export interface Contract {
   paid_amount: number;
   remaining_amount: number;
   payment_status: PaymentStatus;
+  payment_method?: PaymentMethod;
+  receipt_number?: string;
   status: ContractStatus;
   created_by_employee_id?: string;
   assigned_employee_id?: string;
@@ -123,23 +126,49 @@ export interface InAppNotification {
   created_at: string;
 }
 
-// 100% Free WhatsApp Gateway Modes
+// WhatsApp Gateway Settings
 export type WhatsAppMode = 'evolution' | 'wame';
 
 export interface WhatsAppSettings {
   id?: string;
-  mode: WhatsAppMode; // 'evolution' (Evolution API free local docker) or 'wame' (Direct wa.me free)
-  
-  // Evolution API Settings
-  evolution_server_url: string; // http://localhost:8080
-  evolution_instance_name: string; // muhtaraz-instance
-  evolution_api_key: string; // 123456
-  
-  // Common Settings
-  sender_phone: string; // +966920001234
-  admin_phone: string; // +966500000001
-  
+  mode: WhatsAppMode;
+  evolution_server_url: string;
+  evolution_instance_name: string;
+  evolution_api_key: string;
+  sender_phone: string;
+  admin_phone: string;
   is_connected: boolean;
   auto_send_enabled: boolean;
   updated_at?: string;
+}
+
+// Payment Gateway Settings (Moyasar)
+export interface PaymentSettings {
+  id?: string;
+  is_enabled: boolean; // Feature toggle
+  publishable_key: string;
+  secret_key: string;
+  apple_pay_enabled: boolean;
+  mada_enabled: boolean;
+  credit_card_enabled: boolean;
+  vat_number: string;
+  company_commercial_reg: string;
+  updated_at?: string;
+}
+
+// Official Payment Receipt
+export interface Receipt {
+  id: string;
+  receipt_number: string;
+  contract_id: string;
+  customer_id: string;
+  customer_name: string;
+  amount: number;
+  payment_method: PaymentMethod;
+  transaction_ref?: string;
+  contract_number: string;
+  container_number?: string;
+  container_type?: ContainerType;
+  issued_at: string;
+  notes?: string;
 }

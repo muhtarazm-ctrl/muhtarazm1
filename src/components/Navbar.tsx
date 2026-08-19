@@ -11,7 +11,8 @@ import {
   RotateCcw,
   ShieldCheck,
   UserCheck,
-  Settings
+  Settings,
+  CreditCard
 } from 'lucide-react';
 import { InAppNotification, UserRole } from '@/types/database';
 import { NotificationBell } from './NotificationBell';
@@ -154,7 +155,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
           >
             <FileText size={17} />
-            <span>سجل العقود</span>
+            <span>سجل العقود والتحصيل</span>
           </button>
 
           <button
@@ -180,7 +181,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>محرك الواتساب</span>
           </button>
 
-          {/* Admin only Staff Management */}
+          {/* Admin only Tabs */}
           {currentRole === 'admin' && (
             <>
               <button
@@ -207,6 +208,29 @@ export const Navbar: React.FC<NavbarProps> = ({
               </button>
 
               <button
+                id="nav-payment-settings-tab"
+                onClick={() => setCurrentTab('payment-settings')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  background: currentTab === 'payment-settings' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                  color: currentTab === 'payment-settings' ? '#34d399' : '#94a3b8',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <CreditCard size={17} />
+                <span>بوابة الدفع</span>
+              </button>
+
+              <button
                 id="nav-gateway-settings-tab"
                 onClick={() => setCurrentTab('gateway-settings')}
                 style={{
@@ -220,8 +244,8 @@ export const Navbar: React.FC<NavbarProps> = ({
                   fontFamily: 'inherit',
                   fontSize: '0.9rem',
                   fontWeight: 600,
-                  background: currentTab === 'gateway-settings' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
-                  color: currentTab === 'gateway-settings' ? '#34d399' : '#94a3b8',
+                  background: currentTab === 'gateway-settings' ? 'rgba(245, 158, 11, 0.2)' : 'transparent',
+                  color: currentTab === 'gateway-settings' ? '#fbbf24' : '#94a3b8',
                   transition: 'all 0.2s ease'
                 }}
               >
