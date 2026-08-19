@@ -369,6 +369,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                     </p>
                   )}
 
+                  {/* Actions based on container status */}
                   <div style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -376,23 +377,44 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                     paddingTop: '12px',
                     borderTop: '1px solid rgba(255, 255, 255, 0.08)'
                   }}>
-                    <div style={{ fontSize: '0.9rem', color: '#e2e8f0' }}>
+                    <div style={{ fontSize: '0.88rem', color: '#e2e8f0' }}>
                       {container.type === 'debris' ? (
-                        <span>سعر اليومي: <strong style={{ color: '#fbbf24' }}>{container.daily_rate || 150} ر.س</strong></span>
+                        <span>السعر: <strong style={{ color: '#fbbf24' }}>{container.daily_rate || 150} ر.س/يوم</strong></span>
                       ) : (
-                        <span>سعر الشهري: <strong style={{ color: '#a5b4fc' }}>{container.monthly_rate || 3500} ر.س</strong></span>
+                        <span>السعر: <strong style={{ color: '#a5b4fc' }}>{container.monthly_rate || 3500} ر.س/شهر</strong></span>
                       )}
                     </div>
 
                     {container.status === 'available' && onOpenNewContractWithContainer && (
                       <button
                         className="btn-primary"
-                        style={{ padding: '6px 14px', fontSize: '0.82rem' }}
+                        style={{ padding: '6px 14px', fontSize: '0.82rem', fontWeight: 700 }}
                         onClick={() => onOpenNewContractWithContainer(container.id)}
                       >
                         <Plus size={14} />
-                        <span>تأجير الآن</span>
+                        <span>📝 تأجير الحاوية</span>
                       </button>
+                    )}
+
+                    {container.status === 'rented' && onOpenExtendModal && (
+                      (() => {
+                        const activeCont = contracts.find(c => c.container_id === container.id && c.status !== 'completed' && c.status !== 'cancelled');
+                        return activeCont ? (
+                          <button
+                            className="btn-emerald"
+                            style={{
+                              padding: '6px 12px',
+                              fontSize: '0.8rem',
+                              fontWeight: 800,
+                              background: 'linear-gradient(135deg, #0284c7, #0369a1)'
+                            }}
+                            onClick={() => onOpenExtendModal(activeCont)}
+                          >
+                            <RotateCw size={13} />
+                            <span>🔄 تمديد العقد</span>
+                          </button>
+                        ) : null;
+                      })()
                     )}
                   </div>
                 </div>

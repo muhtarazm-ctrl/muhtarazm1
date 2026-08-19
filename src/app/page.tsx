@@ -966,6 +966,7 @@ export default function Home() {
         {currentTab === 'containers' && (
           <ContainersView
             containers={containers}
+            contracts={contracts}
             userRole={currentRole}
             onUpdateStatus={handleUpdateContainerStatus}
             onAddContainer={handleAddContainer}
@@ -974,6 +975,7 @@ export default function Home() {
               setPreSelectedContainerId(cId);
               setIsContractModalOpen(true);
             }}
+            onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
           />
         )}
 

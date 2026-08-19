@@ -4,170 +4,209 @@ import React, { useState } from 'react';
 import { 
   Truck, 
   Plus, 
-  Filter, 
-  Wrench, 
-  CheckCircle, 
-  Clock, 
+  Search, 
+  Edit, 
   Trash2, 
-  Edit3,
-  X
+  CheckCircle2, 
+  Clock, 
+  AlertTriangle,
+  RotateCw,
+  FilePlus,
+  User,
+  Phone
 } from 'lucide-react';
-import { Container, ContainerStatus, ContainerType, UserRole } from '@/types/database';
+import { Container, ContainerStatus, ContainerType, UserRole, Contract } from '@/types/database';
 
 interface ContainersViewProps {
   containers: Container[];
+  contracts?: Contract[];
   userRole: UserRole;
   onUpdateStatus: (containerId: string, status: ContainerStatus) => Promise<void>;
   onAddContainer: (containerData: Partial<Container>) => Promise<boolean>;
   onDeleteContainer: (containerId: string) => Promise<void>;
   onOpenRentModal: (containerId: string) => void;
+  onOpenExtendModal?: (contract: Contract) => void;
 }
 
 export const ContainersView: React.FC<ContainersViewProps> = ({
   containers,
+  contracts = [],
   userRole,
   onUpdateStatus,
   onAddContainer,
   onDeleteContainer,
   onOpenRentModal,
+  onOpenExtendModal
 }) => {
-  const [filterType, setFilterType] = useState<'all' | 'commercial' | 'debris'>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterType, setFilterType] = useState<'all' | ContainerType>('all');
   const [filterStatus, setFilterStatus] = useState<'all' | ContainerStatus>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  
-  // Add container form state
-  const [newNum, setNewNum] = useState('');
+
+  // New Container Form State
+  const [containerNumber, setContainerNumber] = useState('');
   const [newType, setNewType] = useState<ContainerType>('debris');
-  const [newDailyRate, setNewDailyRate] = useState(150);
-  const [newMonthlyRate, setNewMonthlyRate] = useState(3500);
-  const [newNotes, setNewNotes] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
+  const [dailyRate, setDailyRate] = useState(150);
+  const [monthlyRate, setMonthlyRate] = useState(3500);
+  const [notes, setNotes] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const filteredContainers = containers.filter(c => {
     if (filterType !== 'all' && c.type !== filterType) return false;
     if (filterStatus !== 'all' && c.status !== filterStatus) return false;
-    return true;
+    if (!searchTerm.trim()) return true;
+    
+    const query = searchTerm.toLowerCase();
+    return (
+      c.container_number.toLowerCase().includes(query) ||
+      (c.notes && c.notes.toLowerCase().includes(query))
+    );
   });
 
   const handleAddSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newNum.trim()) {
-      alert('يرجى كتابة رقم الحاوية.');
-      return;
-    }
-    setIsSaving(true);
-    const ok = await onAddContainer({
-      container_number: newNum.trim().toUpperCase(),
+    if (!containerNumber.trim()) return;
+
+    setIsSubmitting(true);
+    const success = await onAddContainer({
+      container_number: containerNumber,
       type: newType,
-      status: 'available',
-      daily_rate: newType === 'debris' ? newDailyRate : 0,
-      monthly_rate: newType === 'commercial' ? newMonthlyRate : 0,
-      notes: newNotes
+      daily_rate: newType === 'debris' ? dailyRate : 0,
+      monthly_rate: newType === 'commercial' ? monthlyRate : 0,
+      notes: notes
     });
-    setIsSaving(false);
-    if (ok) {
+    setIsSubmitting(false);
+
+    if (success) {
       setIsAddModalOpen(false);
-      setNewNum('');
-      setNewNotes('');
+      setContainerNumber('');
+      setNotes('');
+    }
+  };
+
+  const getStatusBadge = (status: ContainerStatus) => {
+    switch (status) {
+      case 'available':
+        return { label: 'متاحة للتأجير 🟢', bg: 'rgba(16, 185, 129, 0.15)', text: '#34d399', border: 'rgba(16, 185, 129, 0.3)' };
+      case 'rented':
+        return { label: 'مؤجرة حالياً 🔴', bg: 'rgba(239, 68, 68, 0.15)', text: '#f87171', border: 'rgba(239, 68, 68, 0.3)' };
+      case 'maintenance':
+        return { label: 'في الصيانة 🛠️', bg: 'rgba(245, 158, 11, 0.15)', text: '#fbbf24', border: 'rgba(245, 158, 11, 0.3)' };
     }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
       
-      {/* Header & Actions */}
-      <div style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: '16px'
-      }}>
+      {/* View Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <h2 style={{ fontSize: '1.6rem', fontWeight: '800', color: '#ffffff' }}>
-            أسطول وإدارة الحاويات
+            أسطول الحاويات وإدارة المخزون
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            متابعة فورية لحالة الحاويات التجارية وحاويات الأنقاض وأسعار التأجير
+            تتبع الحاويات، التأجير المباشر للمتاحة [📝 تأجير]، والتمديد الفوري للمؤجرة [🔄 تمديد]
           </p>
         </div>
 
-        <button
-          id="btn-open-add-container"
-          className="btn-primary"
-          onClick={() => setIsAddModalOpen(true)}
-        >
-          <Plus size={18} />
-          <span>إضافة حاوية جديدة</span>
-        </button>
+        {userRole === 'admin' && (
+          <button
+            className="btn-primary"
+            onClick={() => setIsAddModalOpen(true)}
+          >
+            <Plus size={18} />
+            <span>إضافة حاوية جديدة للأسطول</span>
+          </button>
+        )}
       </div>
 
-      {/* Filter Row */}
+      {/* Filter & Search Bar */}
       <div className="glass-panel" style={{
-        padding: '14px 20px',
+        padding: '16px 20px',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         flexWrap: 'wrap',
-        gap: '12px'
+        gap: '14px'
       }}>
-        {/* Type Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '600' }}>النوع:</span>
-          {[
-            { id: 'all', label: 'الكل' },
-            { id: 'commercial', label: 'حاويات تجارية' },
-            { id: 'debris', label: 'حاويات أنقاض' }
-          ].map(t => (
-            <button
-              key={t.id}
-              onClick={() => setFilterType(t.id as any)}
-              style={{
-                padding: '5px 14px',
-                borderRadius: '8px',
-                border: '1px solid',
-                borderColor: filterType === t.id ? 'var(--accent-gold)' : 'transparent',
-                background: filterType === t.id ? 'rgba(245, 158, 11, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                color: filterType === t.id ? '#fbbf24' : '#94a3b8',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: '0.82rem',
-                fontWeight: 600
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Search */}
+        <div style={{ position: 'relative', flex: '1', minWidth: '260px' }}>
+          <Search size={18} color="#94a3b8" style={{ position: 'absolute', right: '14px', top: '50%', transform: 'translateY(-50%)' }} />
+          <input
+            type="text"
+            className="form-input"
+            style={{ paddingRight: '40px' }}
+            placeholder="بحث برقم الحاوية أو الملاحظات..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+          />
         </div>
 
-        {/* Status Filter */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: '600' }}>الحالة:</span>
-          {[
-            { id: 'all', label: 'جميع الحالات' },
-            { id: 'available', label: 'متاحة' },
-            { id: 'rented', label: 'مؤجرة' },
-            { id: 'maintenance', label: 'صيانة' }
-          ].map(s => (
+        {/* Filters */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
+          {/* Status Filter Tabs */}
+          <div style={{ display: 'flex', background: 'rgba(15, 23, 42, 0.6)', padding: '4px', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
             <button
-              key={s.id}
-              onClick={() => setFilterStatus(s.id as any)}
+              onClick={() => setFilterStatus('all')}
               style={{
-                padding: '5px 14px',
+                padding: '6px 12px',
                 borderRadius: '8px',
-                border: '1px solid',
-                borderColor: filterStatus === s.id ? '#38bdf8' : 'transparent',
-                background: filterStatus === s.id ? 'rgba(14, 165, 233, 0.2)' : 'rgba(255, 255, 255, 0.05)',
-                color: filterStatus === s.id ? '#38bdf8' : '#94a3b8',
+                border: 'none',
                 cursor: 'pointer',
                 fontFamily: 'inherit',
                 fontSize: '0.82rem',
-                fontWeight: 600
+                fontWeight: 700,
+                background: filterStatus === 'all' ? '#fbbf24' : 'transparent',
+                color: filterStatus === 'all' ? '#050811' : '#94a3b8'
               }}
             >
-              {s.label}
+              الكل ({containers.length})
             </button>
-          ))}
+            <button
+              onClick={() => setFilterStatus('available')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: filterStatus === 'available' ? '#10b981' : 'transparent',
+                color: filterStatus === 'available' ? '#ffffff' : '#94a3b8'
+              }}
+            >
+              المتاحة ({containers.filter(c => c.status === 'available').length})
+            </button>
+            <button
+              onClick={() => setFilterStatus('rented')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                border: 'none',
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: '0.82rem',
+                fontWeight: 700,
+                background: filterStatus === 'rented' ? '#ef4444' : 'transparent',
+                color: filterStatus === 'rented' ? '#ffffff' : '#94a3b8'
+              }}
+            >
+              المؤجرة ({containers.filter(c => c.status === 'rented').length})
+            </button>
+          </div>
+
+          {/* Type Filter */}
+          <select
+            className="form-select"
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value as any)}
+            style={{ width: 'auto', padding: '7px 12px', fontSize: '0.82rem' }}
+          >
+            <option value="all">كافة الأنواع</option>
+            <option value="commercial">تجاري للمنشآت</option>
+            <option value="debris">أنقاض ومخلفات</option>
+          </select>
         </div>
       </div>
 
@@ -177,113 +216,139 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
         gridTemplateColumns: 'repeat(auto-fill, minmax(320px, 1fr))',
         gap: '20px'
       }}>
-        {filteredContainers.map(container => (
-          <div 
-            key={container.id} 
-            className="glass-panel glass-card-interactive" 
-            style={{ 
-              padding: '24px', 
-              display: 'flex', 
-              flexDirection: 'column', 
-              gap: '16px',
-              borderTop: `4px solid ${
-                container.status === 'available' ? '#10b981' :
-                container.status === 'rented' ? '#0ea5e9' : '#f59e0b'
-              }`
-            }}
-          >
-            {/* Top row */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <div style={{
-                  width: '46px',
-                  height: '46px',
-                  borderRadius: '12px',
-                  background: container.type === 'commercial' ? 'rgba(99, 102, 241, 0.2)' : 'rgba(245, 158, 11, 0.2)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  border: `1px solid ${container.type === 'commercial' ? 'rgba(99, 102, 241, 0.4)' : 'rgba(245, 158, 11, 0.4)'}`
+        {filteredContainers.map((container) => {
+          const badge = getStatusBadge(container.status);
+          const isDebris = container.type === 'debris';
+
+          // Find active contract if container is rented
+          const activeContract = contracts.find(c => 
+            c.container_id === container.id && c.status !== 'completed' && c.status !== 'cancelled'
+          );
+
+          return (
+            <div
+              key={container.id}
+              className="glass-panel"
+              style={{
+                padding: '20px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '14px',
+                borderRight: `4px solid ${container.status === 'available' ? '#10b981' : container.status === 'rented' ? '#ef4444' : '#f59e0b'}`
+              }}
+            >
+              {/* Card Header */}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Truck size={20} color={isDebris ? '#38bdf8' : '#fbbf24'} />
+                    <span style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>
+                      {container.container_number}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
+                    {isDebris ? 'حاوية أنقاض ومخلفات 🏗️' : 'حاوية تجارية للمنشآت 🏢'}
+                  </div>
+                </div>
+
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: '8px',
+                  fontSize: '0.75rem',
+                  fontWeight: 700,
+                  background: badge.bg,
+                  color: badge.text,
+                  border: `1px solid ${badge.border}`
                 }}>
-                  <Truck size={24} color={container.type === 'commercial' ? '#a5b4fc' : '#fbbf24'} />
-                </div>
-                <div>
-                  <div style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>
-                    حاوية {container.container_number}
-                  </div>
-                  <div style={{ display: 'flex', gap: '6px', marginTop: '4px' }}>
-                    <span className={`badge ${container.type === 'commercial' ? 'badge-commercial' : 'badge-debris'}`}>
-                      {container.type === 'commercial' ? 'تجاري' : 'أنقاض'}
-                    </span>
-                    <span className={`badge ${
-                      container.status === 'available' ? 'badge-available' :
-                      container.status === 'rented' ? 'badge-rented' : 'badge-maintenance'
-                    }`}>
-                      {container.status === 'available' ? 'متاحة للتأجير' :
-                       container.status === 'rented' ? 'مؤجرة حالياً' : 'تحت الصيانة'}
-                    </span>
-                  </div>
-                </div>
+                  {badge.label}
+                </span>
               </div>
 
-              {/* Admin delete button */}
-              {userRole === 'admin' && (
-                <button
-                  title="حذف الحاوية (خاص بالمدير)"
-                  onClick={() => {
-                    if (confirm(`هل أنت متأكد من رغبتك بحذف الحاوية (${container.container_number})؟`)) {
-                      onDeleteContainer(container.id);
-                    }
-                  }}
-                  style={{
-                    background: 'rgba(239, 68, 68, 0.1)',
-                    border: '1px solid rgba(239, 68, 68, 0.25)',
-                    color: '#f87171',
-                    borderRadius: '8px',
-                    width: '32px',
-                    height: '32px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    cursor: 'pointer'
-                  }}
-                >
-                  <Trash2 size={15} />
-                </button>
-              )}
-            </div>
-
-            {/* Notes */}
-            {container.notes && (
-              <div style={{ fontSize: '0.85rem', color: '#94a3b8', background: 'rgba(0, 0, 0, 0.25)', padding: '8px 12px', borderRadius: '8px' }}>
-                {container.notes}
-              </div>
-            )}
-
-            {/* Rates */}
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              fontSize: '0.9rem',
-              color: '#e2e8f0',
-              padding: '8px 0',
-              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-              borderBottom: '1px solid rgba(255, 255, 255, 0.08)'
-            }}>
-              {container.type === 'debris' ? (
-                <div>
-                  <span style={{ color: '#94a3b8' }}>سعر اليومي:</span> <strong>{container.daily_rate || 150} ر.س</strong>
-                </div>
-              ) : (
-                <div>
-                  <span style={{ color: '#94a3b8' }}>سعر الشهري:</span> <strong>{container.monthly_rate || 3500} ر.س</strong>
+              {/* Rented Container Info (إذا كانت مؤجرة) */}
+              {container.status === 'rented' && activeContract && (
+                <div style={{
+                  background: 'rgba(239, 68, 68, 0.08)',
+                  border: '1px solid rgba(239, 68, 68, 0.25)',
+                  borderRadius: '10px',
+                  padding: '10px 12px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '4px'
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#ffffff' }}>
+                      👤 {activeContract.customer?.name || 'العميل'}
+                    </span>
+                    <span style={{ fontSize: '0.75rem', color: '#fbbf24', fontWeight: 700 }}>
+                      {activeContract.contract_number}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.75rem', color: '#f87171' }}>
+                    موعد السحب: {new Date(activeContract.expected_pickup_time || activeContract.end_date).toLocaleDateString('ar-SA')}
+                  </div>
                 </div>
               )}
 
-              {/* Status Selector Dropdown */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>الحالة:</span>
+              {/* Rates */}
+              <div style={{
+                background: 'rgba(15, 23, 42, 0.6)',
+                padding: '10px 14px',
+                borderRadius: '10px',
+                display: 'flex',
+                justifyContent: 'space-between',
+                fontSize: '0.85rem'
+              }}>
+                <span style={{ color: '#94a3b8' }}>سعر التأجير:</span>
+                <strong style={{ color: '#ffffff' }}>
+                  {isDebris ? `${container.daily_rate} ر.س / يوم` : `${container.monthly_rate} ر.س / شهر`}
+                </strong>
+              </div>
+
+              {/* Notes */}
+              {container.notes && (
+                <p style={{ fontSize: '0.82rem', color: '#94a3b8', margin: 0, lineHeight: 1.4 }}>
+                  {container.notes}
+                </p>
+              )}
+
+              {/* ⚡ Functional Action Buttons (تأجير للحاوية المتاحة / تمديد للمؤجرة) */}
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                paddingTop: '10px',
+                borderTop: '1px solid rgba(255, 255, 255, 0.08)'
+              }}>
+                {container.status === 'available' ? (
+                  /* Available: 📝 تأجير الحاوية */
+                  <button
+                    className="btn-primary"
+                    style={{ flex: 1, padding: '8px 12px', fontSize: '0.82rem', fontWeight: 700, justifyContent: 'center' }}
+                    onClick={() => onOpenRentModal(container.id)}
+                  >
+                    <FilePlus size={15} />
+                    <span>📝 تأجير الحاوية (عقد جديد)</span>
+                  </button>
+                ) : container.status === 'rented' && activeContract ? (
+                  /* Rented: 🔄 تمديد العقد */
+                  <button
+                    className="btn-emerald"
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      fontSize: '0.82rem',
+                      fontWeight: 800,
+                      justifyContent: 'center',
+                      background: 'linear-gradient(135deg, #0284c7, #0369a1)'
+                    }}
+                    onClick={() => onOpenExtendModal && onOpenExtendModal(activeContract)}
+                  >
+                    <RotateCw size={15} />
+                    <span>🔄 تمديد العقد وتأجيل السحب</span>
+                  </button>
+                ) : null}
+
+                {/* Status Switcher Dropdown */}
                 <select
                   value={container.status}
                   onChange={(e) => onUpdateStatus(container.id, e.target.value as ContainerStatus)}
@@ -292,118 +357,127 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
                     color: '#f8fafc',
                     border: '1px solid rgba(255, 255, 255, 0.15)',
                     borderRadius: '8px',
-                    padding: '4px 8px',
-                    fontSize: '0.8rem',
+                    padding: '6px 8px',
+                    fontSize: '0.78rem',
                     fontFamily: 'inherit',
                     cursor: 'pointer'
                   }}
                 >
-                  <option value="available">متاحة</option>
-                  <option value="rented">مؤجرة</option>
-                  <option value="maintenance">صيانة</option>
+                  <option value="available">متاحة 🟢</option>
+                  <option value="rented">مؤجرة 🔴</option>
+                  <option value="maintenance">صيانة 🛠️</option>
                 </select>
-              </div>
-            </div>
 
-            {/* Bottom Actions */}
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
-              {container.status === 'available' && (
-                <button
-                  className="btn-primary"
-                  style={{ padding: '8px 16px', fontSize: '0.85rem', width: '100%' }}
-                  onClick={() => onOpenRentModal(container.id)}
-                >
-                  <Plus size={15} />
-                  <span>تأجير الحاوية الآن</span>
-                </button>
-              )}
+                {/* Delete Container (Admin Only) */}
+                {userRole === 'admin' && (
+                  <button
+                    title="حذف الحاوية من الأسطول"
+                    onClick={() => {
+                      if (confirm(`هل أنت متأكد من حذف الحاوية (${container.container_number})؟`)) {
+                        onDeleteContainer(container.id);
+                      }
+                    }}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.15)',
+                      border: '1px solid rgba(239, 68, 68, 0.3)',
+                      color: '#f87171',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                )}
+              </div>
+
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Add Container Modal */}
       {isAddModalOpen && (
         <div className="modal-backdrop" onClick={() => setIsAddModalOpen(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ padding: '28px', maxWidth: '500px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff' }}>إضافة حاوية جديدة</h3>
-              <button 
-                onClick={() => setIsAddModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer' }}
-              >
-                <X size={20} />
-              </button>
-            </div>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '480px', padding: '28px' }}>
+            <h3 style={{ fontSize: '1.25rem', fontWeight: '800', color: '#ffffff', marginBottom: '6px' }}>
+              إضافة حاوية جديدة للأسطول
+            </h3>
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginBottom: '20px' }}>
+              أدخل رقم الحاوية ونوعها لتنضم تلقائياً إلى مخزون الحاويات المتاحة
+            </p>
 
             <form onSubmit={handleAddSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  رقم الحاوية الفريد:
+                  رقم الحاوية (كود التتبع):
                 </label>
                 <input
-                  id="new-container-number-input"
                   type="text"
                   className="form-input"
-                  value={newNum}
-                  onChange={(e) => setNewNum(e.target.value)}
-                  placeholder="مثال: C-105 أو D-205"
+                  value={containerNumber}
+                  onChange={(e) => setContainerNumber(e.target.value)}
+                  placeholder="مثال: D-204 أو C-105"
                   required
                 />
               </div>
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  نوع الحاوية (نوعان فقط):
+                  نوع الحاوية:
                 </label>
                 <select
                   className="form-select"
                   value={newType}
                   onChange={(e) => setNewType(e.target.value as ContainerType)}
                 >
-                  <option value="debris">حاوية أنقاض (عقود يومية)</option>
-                  <option value="commercial">حاوية تجارية (عقود شهرية / سنوية)</option>
+                  <option value="debris">حاوية أنقاض ومخلفات (يومي) 🏗️</option>
+                  <option value="commercial">حاوية تجارية للمنشآت (شهري/سنوي) 🏢</option>
                 </select>
               </div>
 
               {newType === 'debris' ? (
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                    سعر التأجير اليومي (ر.س):
+                    السعر اليومي (ر.س):
                   </label>
                   <input
                     type="number"
+                    min="0"
                     className="form-input"
-                    value={newDailyRate}
-                    onChange={(e) => setNewDailyRate(parseFloat(e.target.value) || 0)}
-                    required
+                    value={dailyRate}
+                    onChange={(e) => setDailyRate(Number(e.target.value))}
                   />
                 </div>
               ) : (
                 <div>
                   <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                    سعر التأجير الشهري (ر.س):
+                    السعر الشهري (ر.س):
                   </label>
                   <input
                     type="number"
+                    min="0"
                     className="form-input"
-                    value={newMonthlyRate}
-                    onChange={(e) => setNewMonthlyRate(parseFloat(e.target.value) || 0)}
-                    required
+                    value={monthlyRate}
+                    onChange={(e) => setMonthlyRate(Number(e.target.value))}
                   />
                 </div>
               )}
 
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  ملاحظات أو مواصفات:
+                  ملاحظات أو مواصفات الحاوية:
                 </label>
                 <textarea
                   className="form-input"
-                  rows={3}
-                  value={newNotes}
-                  onChange={(e) => setNewNotes(e.target.value)}
-                  placeholder="ملاحظات حول حالة الحاوية أو موقعها الثابت..."
+                  style={{ minHeight: '70px', resize: 'vertical' }}
+                  value={notes}
+                  onChange={(e) => setNotes(e.target.value)}
+                  placeholder="مثال: حاوية 20 ياردة مخصصة للمخلفات الثقيلة..."
                 />
               </div>
 
@@ -416,18 +490,18 @@ export const ContainersView: React.FC<ContainersViewProps> = ({
                   إلغاء
                 </button>
                 <button
-                  id="confirm-add-container-btn"
                   type="submit"
                   className="btn-primary"
-                  disabled={isSaving}
+                  disabled={isSubmitting}
                 >
-                  {isSaving ? 'جارٍ الإضافة...' : 'حفظ الحاوية'}
+                  {isSubmitting ? 'جارٍ الحفظ...' : 'إضافة للأسطول'}
                 </button>
               </div>
             </form>
           </div>
         </div>
       )}
+
     </div>
   );
 };
