@@ -123,17 +123,22 @@ export interface InAppNotification {
   created_at: string;
 }
 
-// WhatsApp Gateway Settings
-export type WhatsAppProvider = 'ultramsg' | 'wasapi' | 'twilio' | 'webhook' | 'custom';
+// 100% Free WhatsApp Gateway Modes
+export type WhatsAppMode = 'evolution' | 'wame';
 
 export interface WhatsAppSettings {
   id?: string;
-  provider: WhatsAppProvider;
-  instance_id?: string;
-  api_token?: string;
-  api_url?: string;
-  sender_phone?: string;
-  admin_phone?: string;
+  mode: WhatsAppMode; // 'evolution' (Evolution API free local docker) or 'wame' (Direct wa.me free)
+  
+  // Evolution API Settings
+  evolution_server_url: string; // http://localhost:8080
+  evolution_instance_name: string; // muhtaraz-instance
+  evolution_api_key: string; // 123456
+  
+  // Common Settings
+  sender_phone: string; // +966920001234
+  admin_phone: string; // +966500000001
+  
   is_connected: boolean;
   auto_send_enabled: boolean;
   updated_at?: string;

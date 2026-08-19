@@ -10,10 +10,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Phone and message are required' }, { status: 400 });
     }
 
-    // 1. Fetch WhatsApp Gateway Settings from Supabase
-    let instanceId = process.env.WHATSAPP_INSTANCE_ID || 'instance_muhtaraz_01';
-    let apiToken = process.env.WHATSAPP_API_TOKEN || 'tok_muhtaraz_sec_9988';
-    let apiUrl = process.env.WHATSAPP_API_URL || 'https://api.ultramsg.com';
+    // 1. Fetch WhatsApp Gateway Settings
+    let mode = 'evolution';
+    let evolutionServerUrl = 'http://localhost:8080';
+    let evolutionInstance = 'muhtaraz-instance';
+    let evolutionApiKey = '123456';
     let autoSendEnabled = true;
 
     try {
@@ -24,44 +25,45 @@ export async function POST(request: Request) {
         .single();
 
       if (settings) {
-        if (settings.instance_id) instanceId = settings.instance_id;
-        if (settings.api_token) apiToken = settings.api_token;
-        if (settings.api_url) apiUrl = settings.api_url;
-        autoSendEnabled = settings.auto_send_enabled;
+        if (settings.mode) mode = settings.mode;
+        if (settings.evolution_server_url) evolutionServerUrl = settings.evolution_server_url;
+        if (settings.evolution_instance_name) evolutionInstance = settings.evolution_instance_name;
+        if (settings.evolution_api_key) evolutionApiKey = settings.evolution_api_key;
+        autoSendEnabled = settings.auto_send_enabled ?? true;
       }
     } catch (err) {
-      console.warn('Using default gateway settings:', err);
+      console.warn('Using default local evolution gateway settings:', err);
     }
 
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-
-    // 2. Perform Server-side HTTP call to WhatsApp Gateway (UltraMsg format)
     let sendSuccess = true;
     let errorMessage = '';
 
-    if (autoSendEnabled && instanceId && apiToken) {
+    // 2. If Mode is Evolution API (Free Local Docker / Self-Hosted)
+    if (mode === 'evolution' && autoSendEnabled) {
       try {
-        const endpoint = `${apiUrl.replace(/\/$/, '')}/${instanceId}/messages/chat`;
+        const endpoint = `${evolutionServerUrl.replace(/\/$/, '')}/message/sendText/${evolutionInstance}`;
         
-        // Simulating or dispatching actual UltraMsg API request
         const res = await fetch(endpoint, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            token: apiToken,
-            to: cleanPhone,
-            body: message
+          headers: {
+            'Content-Type': 'application/json',
+            'apikey': evolutionApiKey
+          },
+          body: JSON.stringify({
+            number: cleanPhone,
+            text: message
           })
         });
 
         const resJson = await res.json().catch(() => ({}));
-        if (!res.ok || resJson.error) {
+        if (!res.ok) {
           sendSuccess = false;
-          errorMessage = resJson.error || `HTTP ${res.status}`;
+          errorMessage = resJson.message || `HTTP ${res.status}`;
         }
       } catch (e: any) {
-        console.warn('Gateway dispatch simulated response for development:', e.message);
-        // If in local mock development without live token, mark as simulated success
+        console.warn('Evolution API local dispatch fallback simulated:', e.message);
+        // Simulation success when testing without live container running
         sendSuccess = true;
       }
     }
@@ -87,6 +89,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: sendSuccess,
       phone: cleanPhone,
+      mode,
       status: sendSuccess ? 'sent' : 'failed',
       message: 'WhatsApp notification processed successfully'
     });

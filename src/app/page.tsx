@@ -210,10 +210,10 @@ const initialStaff: Profile[] = [
 ];
 
 const initialGatewaySettings: IWhatsAppSettings = {
-  provider: 'ultramsg',
-  instance_id: 'instance_muhtaraz_01',
-  api_token: 'tok_muhtaraz_sec_9988',
-  api_url: 'https://api.ultramsg.com',
+  mode: 'evolution',
+  evolution_server_url: 'http://localhost:8080',
+  evolution_instance_name: 'muhtaraz-instance',
+  evolution_api_key: '123456',
   sender_phone: '+966920001234',
   admin_phone: '+966500000001',
   is_connected: true,
@@ -729,9 +729,11 @@ export default function Home() {
         {currentTab === 'gateway-settings' && currentRole === 'admin' && (
           <WhatsAppSettings
             settings={gatewaySettings}
+            notifications={notifications}
             onSaveSettings={handleSaveGatewaySettings}
             onTestConnection={handleTestConnection}
-            onRunBatchProcess={handleRunBatchProcess}
+            onSendWhatsApp={handleSendWhatsApp}
+            onMarkAsSent={handleMarkNotificationSent}
           />
         )}
       </main>
