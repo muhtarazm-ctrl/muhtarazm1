@@ -122,3 +122,19 @@ export interface InAppNotification {
   is_read: boolean;
   created_at: string;
 }
+
+// WhatsApp Gateway Settings
+export type WhatsAppProvider = 'ultramsg' | 'wasapi' | 'twilio' | 'webhook' | 'custom';
+
+export interface WhatsAppSettings {
+  id?: string;
+  provider: WhatsAppProvider;
+  instance_id?: string;
+  api_token?: string;
+  api_url?: string;
+  sender_phone?: string;
+  admin_phone?: string;
+  is_connected: boolean;
+  auto_send_enabled: boolean;
+  updated_at?: string;
+}

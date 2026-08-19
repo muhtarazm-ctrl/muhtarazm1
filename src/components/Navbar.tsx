@@ -10,7 +10,8 @@ import {
   Users, 
   RotateCcw,
   ShieldCheck,
-  UserCheck
+  UserCheck,
+  Settings
 } from 'lucide-react';
 import { InAppNotification, UserRole } from '@/types/database';
 import { NotificationBell } from './NotificationBell';
@@ -181,28 +182,53 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Admin only Staff Management */}
           {currentRole === 'admin' && (
-            <button
-              id="nav-staff-tab"
-              onClick={() => setCurrentTab('staff')}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '8px',
-                padding: '8px 16px',
-                borderRadius: '10px',
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: '0.9rem',
-                fontWeight: 600,
-                background: currentTab === 'staff' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
-                color: currentTab === 'staff' ? '#a5b4fc' : '#94a3b8',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <Users size={17} />
-              <span>إدارة الموظفين</span>
-            </button>
+            <>
+              <button
+                id="nav-staff-tab"
+                onClick={() => setCurrentTab('staff')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  background: currentTab === 'staff' ? 'rgba(99, 102, 241, 0.2)' : 'transparent',
+                  color: currentTab === 'staff' ? '#a5b4fc' : '#94a3b8',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Users size={17} />
+                <span>إدارة الموظفين</span>
+              </button>
+
+              <button
+                id="nav-gateway-settings-tab"
+                onClick={() => setCurrentTab('gateway-settings')}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                  padding: '8px 16px',
+                  borderRadius: '10px',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: '0.9rem',
+                  fontWeight: 600,
+                  background: currentTab === 'gateway-settings' ? 'rgba(16, 185, 129, 0.2)' : 'transparent',
+                  color: currentTab === 'gateway-settings' ? '#34d399' : '#94a3b8',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <Settings size={17} />
+                <span>إعدادات البوابة</span>
+              </button>
+            </>
           )}
         </nav>
 

@@ -403,7 +403,31 @@ CREATE TRIGGER tr_inapp_notif_contract
     EXECUTE FUNCTION public.trigger_inapp_notification_on_contract();
 
 -- ==============================================================================
--- 11. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
+-- 11. جدول whatsapp_settings (إعدادات بوابة الواتساب الموحدة والربط الآلي)
+-- ==============================================================================
+CREATE TABLE IF NOT EXISTS public.whatsapp_settings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    provider TEXT NOT NULL DEFAULT 'ultramsg' CHECK (provider IN ('ultramsg', 'wasapi', 'twilio', 'webhook', 'custom')),
+    instance_id TEXT,                                           -- معرف الجلسة (Instance ID)
+    api_token TEXT,                                             -- رمز الوصول السري (API Token)
+    api_url TEXT DEFAULT 'https://api.ultramsg.com',            -- رابط السيرفر / البوابة
+    sender_phone TEXT,                                          -- الرقم الموحد للمنشأة (مثال: +966920000000)
+    admin_phone TEXT,                                           -- رقم جوال المدير العام لاستلام التنبيهات التشغيلية
+    is_connected BOOLEAN NOT NULL DEFAULT false,                -- حالة الاتصال
+    auto_send_enabled BOOLEAN NOT NULL DEFAULT true,            -- تفعيل الإرسال التلقائي الصامت من السيرفر
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+COMMENT ON TABLE public.whatsapp_settings IS 'جدول إعدادات ومفاتيح بوابة الواتساب الموحدة والإرسال الآلي';
+
+DROP TRIGGER IF EXISTS tr_whatsapp_settings_updated_at ON public.whatsapp_settings;
+CREATE TRIGGER tr_whatsapp_settings_updated_at
+    BEFORE UPDATE ON public.whatsapp_settings
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- ==============================================================================
+-- 12. سياسات الأمان على مستوى الصفوف (Row Level Security - RLS)
 -- تم استخدام DROP POLICY IF EXISTS قبل كل سياسة لضمان قابلية إعادة التنفيذ دون أخطاء
 -- ==============================================================================
 
@@ -413,6 +437,7 @@ ALTER TABLE public.customers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.contracts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notification_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.whatsapp_settings ENABLE ROW LEVEL SECURITY;
 
 -- دالة مساعدة لمعرفة هل المستخدم الحالي مدير (Admin)
 CREATE OR REPLACE FUNCTION public.is_admin()
@@ -593,8 +618,22 @@ CREATE POLICY "Admins only can delete in-app notifications"
     ON public.notifications FOR DELETE
     USING (public.is_admin());
 
+-- ------------------------------------------------------------------------------
+-- سياسات جدول whatsapp_settings (إعدادات البوابة - خاصة بالمدير فقط)
+-- ------------------------------------------------------------------------------
+DROP POLICY IF EXISTS "Admins full control on whatsapp_settings" ON public.whatsapp_settings;
+CREATE POLICY "Admins full control on whatsapp_settings"
+    ON public.whatsapp_settings FOR ALL
+    USING (public.is_admin())
+    WITH CHECK (public.is_admin());
+
+DROP POLICY IF EXISTS "Staff can view whatsapp_settings" ON public.whatsapp_settings;
+CREATE POLICY "Staff can view whatsapp_settings"
+    ON public.whatsapp_settings FOR SELECT
+    USING (public.is_active_staff());
+
 -- ==============================================================================
--- 12. بيانات تجريبية أولية (Seed Data)
+-- 13. بيانات تجريبية أولية (Seed Data)
 -- ==============================================================================
 INSERT INTO public.containers (container_number, type, status, daily_rate, monthly_rate, notes)
 VALUES 
@@ -605,6 +644,12 @@ VALUES
     ('D-203', 'debris', 'available', 150.00, 0.00, 'حاوية أنقاض ومخلفات يومية')
 ON CONFLICT (container_number) DO NOTHING;
 
+-- إعدادات بوابة الواتساب الافتراضية
+INSERT INTO public.whatsapp_settings (provider, instance_id, api_token, sender_phone, admin_phone, is_connected, auto_send_enabled)
+VALUES 
+    ('ultramsg', 'instance_muhtaraz_01', 'tok_muhtaraz_sec_9988', '+966920001234', '+966500000001', true, true)
+ON CONFLICT DO NOTHING;
+
 -- إضافة إشعارات داخلية أولية تجريبية
 INSERT INTO public.notifications (title, message, type, is_read)
 VALUES 
@@ -612,3 +657,4 @@ VALUES
     ('📅 تنبيه تجديد عقد تجاري (قبل 5 أيام)', 'عقد الحاوية التجارية (CTR-2026-001) لمؤسسة صروح البناء شارف على الانتهاء.', 'contract_expiry_soon', false),
     ('✨ جاهزية النظام', 'تم ربط وتشغيل محرك الإشعارات الداخلية وأنظمة المتابعة اللحظية بنجاح.', 'system_alert', true)
 ON CONFLICT DO NOTHING;
+
