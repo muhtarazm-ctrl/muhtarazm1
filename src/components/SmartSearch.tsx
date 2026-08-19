@@ -13,7 +13,8 @@ import {
   AlertCircle,
   ExternalLink,
   MessageCircle,
-  Plus
+  Plus,
+  RotateCw
 } from 'lucide-react';
 import { Container, Contract, Customer, NotificationLog } from '@/types/database';
 
