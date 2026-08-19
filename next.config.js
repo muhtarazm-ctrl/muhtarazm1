@@ -1,4 +1,6 @@
 /** @type {import('next').NextConfig} */
+process.env.NEXT_TELEMETRY_DISABLED = '1';
+
 const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,

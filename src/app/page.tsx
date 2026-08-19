@@ -263,7 +263,7 @@ const initialPaymentSettings: IPaymentSettings = {
   company_commercial_reg: '1010889900'
 };
 
-export default function Home() {
+function MainDashboard() {
   // App State
   const [showSplash, setShowSplash] = useState(true);
   const [currentTab, setCurrentTab] = useState('search');
@@ -1262,5 +1262,31 @@ export default function Home() {
         المحترز للحاويات © {new Date().getFullYear()} — نظام إدارة وتأجير الحاويات التجارية والأنقاض والتحصيل المالي
       </footer>
     </div>
+  );
+}
+
+export default function Home() {
+  return (
+    <React.Suspense fallback={
+      <div style={{
+        minHeight: '100vh',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: '#050811',
+        color: '#f8fafc',
+        fontFamily: 'system-ui, -apple-system, sans-serif'
+      }}>
+        <div style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fbbf24', marginBottom: '8px' }}>
+          المحترز للحاويات 🏗️
+        </div>
+        <div style={{ fontSize: '0.9rem', color: '#94a3b8' }}>
+          جارٍ تحميل النظام والربط اللحظي...
+        </div>
+      </div>
+    }>
+      <MainDashboard />
+    </React.Suspense>
   );
 }
