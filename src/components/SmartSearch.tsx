@@ -30,6 +30,7 @@ interface SmartSearchProps {
   onSendWhatsApp?: (phone: string, message: string) => void;
   onOpenReceipt?: (contract: Contract) => void;
   onOpenExtendModal?: (contract: Contract) => void;
+  onOpenDriverDispatch?: (contract: Contract) => void;
   onConfirmCashPayment?: (contract: Contract) => Promise<void>;
   onSendSadadLink?: (contract: Contract) => Promise<void>;
 }
@@ -46,6 +47,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
   onSendWhatsApp,
   onOpenReceipt,
   onOpenExtendModal,
+  onOpenDriverDispatch,
   onConfirmCashPayment,
   onSendSadadLink
 }) => {
@@ -510,8 +512,25 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                       )}
                     </span>
 
-                    {/* Simple Payment Actions + Extension */}
+                    {/* Simple Payment Actions + Extension + Driver WhatsApp Dispatch */}
                     <div style={{ display: 'flex', gap: '6px' }}>
+                      {onOpenDriverDispatch && (
+                        <button
+                          className="btn-emerald"
+                          style={{
+                            padding: '6px 8px',
+                            fontSize: '0.75rem',
+                            background: 'rgba(16, 185, 129, 0.2)',
+                            borderColor: '#10b981',
+                            color: '#34d399'
+                          }}
+                          onClick={() => onOpenDriverDispatch(contract)}
+                          title="إرسال أمر المهمة الميدانية إلى جوال السائق بالواتساب"
+                        >
+                          <span>📲 للسائق</span>
+                        </button>
+                      )}
+
                       {(contract.total_cost - contract.paid_amount) <= 0 || contract.payment_status === 'paid' ? (
                         <>
                           {onOpenReceipt && (userRole === 'admin' || permissions?.can_collect_payments !== false) && (

@@ -365,7 +365,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </button>
           </div>
 
-          {/* If Employee Role: Show Active Staff Selector Dropdown */}
+          {/* If Employee Role: Show Active Staff Selector Dropdown (Office staff only, Drivers do not login) */}
           {currentRole === 'employee' && staffList.length > 0 && setSelectedStaffId && (
             <select
               value={selectedStaffId}
@@ -381,11 +381,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                 fontWeight: 700,
                 cursor: 'pointer'
               }}
-              title="تحديد حساب الموظف / السائق لمعاينة صلاحياته الميدانية"
+              title="تحديد حساب موظف الاستقبال لمعاينة صلاحياته"
             >
-              {staffList.filter(s => s.role !== 'admin').map(s => (
+              {staffList.filter(s => s.role !== 'admin' && !s.full_name.includes('سائق')).map(s => (
                 <option key={s.id} value={s.id}>
-                  👤 {s.full_name}
+                  👷 {s.full_name}
                 </option>
               ))}
             </select>

@@ -33,6 +33,8 @@ import { NewContractModal } from '@/components/NewContractModal';
 import { ReceiptModal } from '@/components/ReceiptModal';
 import { ExtendContractModal } from '@/components/ExtendContractModal';
 import { InventoryManagement } from '@/components/InventoryManagement';
+import { DriverDispatchModal } from '@/components/DriverDispatchModal';
+import { formatDriverWhatsAppMessage } from '@/utils/driverDispatch';
 
 // Sample Seed Data
 const initialStaff: Profile[] = [
@@ -313,6 +315,9 @@ export default function Home() {
 
   // Extend Contract Modal State
   const [selectedExtendContract, setSelectedExtendContract] = useState<Contract | null>(null);
+
+  // Driver Mission WhatsApp Dispatch Modal State
+  const [selectedDriverDispatchContract, setSelectedDriverDispatchContract] = useState<Contract | null>(null);
 
   // Fetch initial data from Supabase if connected
   useEffect(() => {
@@ -1115,6 +1120,7 @@ export default function Home() {
             onSendWhatsApp={handleSendWhatsApp}
             onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
             onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
+            onOpenDriverDispatch={(contract) => setSelectedDriverDispatchContract(contract)}
             onConfirmCashPayment={handleConfirmCashPayment}
             onSendSadadLink={handleSendSadadLink}
           />
@@ -1148,6 +1154,7 @@ export default function Home() {
             onSendWhatsApp={handleSendWhatsApp}
             onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
             onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
+            onOpenDriverDispatch={(contract) => setSelectedDriverDispatchContract(contract)}
             onConfirmCashPayment={handleConfirmCashPayment}
             onSendSadadLink={handleSendSadadLink}
           />
@@ -1230,6 +1237,18 @@ export default function Home() {
         onClose={() => setSelectedExtendContract(null)}
         contract={selectedExtendContract}
         onConfirmExtension={handleConfirmExtension}
+      />
+
+      {/* 7. Driver Mission WhatsApp Dispatch Modal */}
+      <DriverDispatchModal
+        isOpen={!!selectedDriverDispatchContract}
+        onClose={() => setSelectedDriverDispatchContract(null)}
+        contract={selectedDriverDispatchContract}
+        drivers={staffList}
+        onSendViaApi={async (phone, msg) => {
+          handleSendWhatsApp(phone, msg);
+          return true;
+        }}
       />
 
       {/* Footer */}

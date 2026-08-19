@@ -33,6 +33,7 @@ interface ContractsViewProps {
   onSendWhatsApp: (phone: string, message: string) => void;
   onOpenReceipt: (contract: Contract) => void;
   onOpenExtendModal: (contract: Contract) => void;
+  onOpenDriverDispatch?: (contract: Contract) => void;
   onConfirmCashPayment: (contract: Contract) => Promise<void>;
   onSendSadadLink: (contract: Contract) => Promise<void>;
 }
@@ -47,6 +48,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   onSendWhatsApp,
   onOpenReceipt,
   onOpenExtendModal,
+  onOpenDriverDispatch,
   onConfirmCashPayment,
   onSendSadadLink
 }) => {
@@ -337,20 +339,46 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 )}
               </div>
 
-              {/* Responsible Driver Badge */}
+              {/* Responsible Driver Badge & WhatsApp Task Dispatch Button */}
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
+                justifyContent: 'space-between',
                 gap: '8px',
-                padding: '6px 12px',
+                padding: '8px 12px',
                 borderRadius: '8px',
                 background: 'rgba(16, 185, 129, 0.08)',
                 border: '1px solid rgba(16, 185, 129, 0.2)',
                 fontSize: '0.82rem',
                 color: '#34d399'
               }}>
-                <Truck size={14} />
-                <span>المسؤول الميداني: <strong>{driverName}</strong></span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                  <Truck size={15} />
+                  <span>السائق الميداني: <strong>{driverName}</strong></span>
+                </div>
+
+                {onOpenDriverDispatch && (
+                  <button
+                    onClick={() => onOpenDriverDispatch(contract)}
+                    style={{
+                      background: 'rgba(16, 185, 129, 0.2)',
+                      border: '1px solid #10b981',
+                      color: '#34d399',
+                      borderRadius: '6px',
+                      padding: '4px 8px',
+                      fontSize: '0.74rem',
+                      fontWeight: 800,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                      transition: 'all 0.2s ease'
+                    }}
+                    title="إرسال أمر تفويض ومهمة تشغيلية (إنزال/سحب) إلى جوال السائق بالواتساب مع اللوكيشن ورقم العميل والتحصيل"
+                  >
+                    <span>📲 إرسال المهمة للسائق</span>
+                  </button>
+                )}
               </div>
 
               {/* Timing */}
