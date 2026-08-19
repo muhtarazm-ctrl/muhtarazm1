@@ -1,7 +1,8 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
@@ -27,26 +28,34 @@ export async function POST(request: Request) {
         .single();
 
       if (settings) {
-        if (settings.mode) mode = settings.mode;
-        if (settings.evolution_server_url) evolutionServerUrl = settings.evolution_server_url;
-        if (settings.evolution_instance_name) evolutionInstance = settings.evolution_instance_name;
-        if (settings.evolution_api_key) evolutionApiKey = settings.evolution_api_key;
+        mode = settings.gateway_mode || 'evolution';
+        evolutionServerUrl = settings.evolution_server_url || evolutionServerUrl;
+        evolutionInstance = settings.evolution_instance || evolutionInstance;
+        evolutionApiKey = settings.evolution_api_key || evolutionApiKey;
         autoSendEnabled = settings.auto_send_enabled ?? true;
       }
     } catch (err) {
-      console.warn('Using default local evolution gateway settings:', err);
+      console.warn('Using default settings due to db fetch failure:', err);
     }
 
-    const cleanPhone = phone.replace(/[^0-9]/g, '');
-    let sendSuccess = true;
-    let errorMessage = '';
+    // Format phone number
+    let cleanPhone = phone.replace(/[^0-9]/g, '');
+    if (cleanPhone.startsWith('05')) {
+      cleanPhone = '966' + cleanPhone.substring(1);
+    } else if (cleanPhone.startsWith('5')) {
+      cleanPhone = '966' + cleanPhone;
+    }
 
-    // 2. If Mode is Evolution API (Free Local Docker / Self-Hosted)
+    let sendSuccess = false;
+    let apiResponse = null;
+
+    // 2. Dispatch based on Gateway Mode
     if (mode === 'evolution' && autoSendEnabled) {
       try {
-        const endpoint = `${evolutionServerUrl.replace(/\/$/, '')}/message/sendText/${evolutionInstance}`;
-        
-        const res = await fetch(endpoint, {
+        const cleanServer = evolutionServerUrl.replace(/\/+$/, '');
+        const targetUrl = `${cleanServer}/message/sendText/${evolutionInstance}`;
+
+        const res = await fetch(targetUrl, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -54,49 +63,50 @@ export async function POST(request: Request) {
           },
           body: JSON.stringify({
             number: cleanPhone,
-            text: message
+            text: message,
+            options: {
+              delay: 1200,
+              presence: 'composing',
+              linkPreview: true
+            }
           })
         });
 
-        const resJson = await res.json().catch(() => ({}));
-        if (!res.ok) {
-          sendSuccess = false;
-          errorMessage = resJson.message || `HTTP ${res.status}`;
-        }
-      } catch (e: any) {
-        console.warn('Evolution API local dispatch fallback simulated:', e.message);
-        // Simulation success when testing without live container running
-        sendSuccess = true;
+        apiResponse = await res.json();
+        sendSuccess = res.ok;
+      } catch (fetchErr: any) {
+        console.error('Evolution API Fetch Error:', fetchErr);
+        sendSuccess = false;
+        apiResponse = { error: fetchErr.message };
       }
+    } else {
+      // Direct Web / Manual Mode
+      sendSuccess = true;
+      apiResponse = { mode: 'manual_or_web', direct_url: `https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}` };
     }
 
-    // 3. Log into notification_logs
+    // 3. Log notification to Supabase
     try {
       await supabase.from('notification_logs').insert([{
         contract_id: contract_id || null,
         customer_id: customer_id || null,
+        phone: cleanPhone,
+        message,
         recipient_role: recipient_role || 'customer',
-        recipient_phone: phone,
-        notification_type: notification_type || 'custom_alert',
-        message_body: message,
-        scheduled_for: new Date().toISOString(),
-        sent_at: sendSuccess ? new Date().toISOString() : null,
-        status: sendSuccess ? 'sent' : 'failed',
-        error_message: errorMessage || null
+        notification_type: notification_type || 'manual_notice',
+        status: sendSuccess ? 'sent' : 'failed'
       }]);
-    } catch (dbErr) {
-      console.error('Failed to log notification to database:', dbErr);
+    } catch (logErr) {
+      console.error('Failed to write log to supabase:', logErr);
     }
 
     return NextResponse.json({
       success: sendSuccess,
-      phone: cleanPhone,
-      mode,
-      status: sendSuccess ? 'sent' : 'failed',
-      message: 'WhatsApp notification processed successfully'
+      data: apiResponse,
+      phone: cleanPhone
     });
-
   } catch (error: any) {
+    console.error('WhatsApp API Route Error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

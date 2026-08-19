@@ -1,7 +1,8 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-
-export const dynamic = 'force-dynamic';
 
 export async function GET() {
   return handleProcess();
@@ -25,63 +26,64 @@ async function handleProcess() {
         .single();
 
       if (settings) {
-        if (settings.admin_phone) adminPhone = settings.admin_phone;
-        autoSendEnabled = settings.auto_send_enabled;
+        adminPhone = settings.admin_phone || adminPhone;
+        autoSendEnabled = settings.auto_send_enabled ?? true;
       }
-    } catch (e) {
-      console.warn('Using fallback settings for cron:', e);
+    } catch (err) {
+      console.warn('Could not fetch settings for cron, using defaults');
     }
 
-    if (!autoSendEnabled) {
-      return NextResponse.json({
-        success: true,
-        message: 'Auto-send is currently disabled in WhatsApp settings',
-        processed: 0
-      });
+    // 2. Query contracts expiring in the next 24 hours
+    const now = new Date();
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    const { data: contracts, error } = await supabase
+      .from('contracts')
+      .select('*, customer:customers(*), container:containers(*)')
+      .eq('status', 'active')
+      .lte('end_date', tomorrow.toISOString())
+      .gte('end_date', now.toISOString());
+
+    if (error) {
+      throw error;
     }
 
-    // 2. Fetch pending notifications due now
-    let pendingList: any[] = [];
-    try {
-      const { data } = await supabase
-        .from('notification_logs')
-        .select('*')
-        .eq('status', 'pending')
-        .lte('scheduled_for', new Date().toISOString());
+    const processed = [];
 
-      if (data) pendingList = data;
-    } catch (e) {
-      console.warn('Error fetching pending notifications:', e);
-    }
+    if (contracts && contracts.length > 0) {
+      for (const contract of contracts) {
+        const customer = contract.customer;
+        const daysLeft = Math.max(0, Math.ceil((new Date(contract.end_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)));
+        
+        // Build Reminder Message
+        const customerMsg = `مرحباً ${customer?.name || 'عزيزنا العميل'} 👋\nنود تذكيركم بأن عقد الحاوية رقم (${contract.contract_number}) سينتهي خلال ${daysLeft} يوم.\nيرجى التواصل معنا لتجديد العقد أو جدولة سحب الحاوية.\n\nالمحترز للحاويات 🏗️`;
 
-    let sentCount = 0;
-
-    // 3. Process each notification
-    for (const item of pendingList) {
-      // Mark as sent
-      try {
-        await supabase
-          .from('notification_logs')
-          .update({
-            status: 'sent',
-            sent_at: new Date().toISOString()
-          })
-          .eq('id', item.id);
-        sentCount++;
-      } catch (err) {
-        console.error('Error updating notification status:', err);
+        // Send via internal WhatsApp route or log
+        try {
+          await supabase.from('notification_logs').insert([{
+            contract_id: contract.id,
+            customer_id: customer?.id,
+            phone: customer?.phone || '',
+            message: customerMsg,
+            recipient_role: 'customer',
+            notification_type: 'cron_expiry_notice',
+            status: 'pending'
+          }]);
+          processed.push(contract.contract_number);
+        } catch (e) {
+          console.error('Error queueing notification:', e);
+        }
       }
     }
 
     return NextResponse.json({
       success: true,
-      processed: pendingList.length,
-      sentCount,
-      adminPhoneNotified: adminPhone,
+      processed_count: processed.length,
+      contracts: processed,
       timestamp: new Date().toISOString()
     });
-
   } catch (error: any) {
+    console.error('Cron job error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

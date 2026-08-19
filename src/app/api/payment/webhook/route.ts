@@ -1,4 +1,3 @@
-// Moyasar Payment Webhook - Force Dynamic Execution on Render
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
 
@@ -43,48 +42,55 @@ export async function POST(request: Request) {
       try {
         let query = supabase.from('contracts').update({
           payment_status: 'paid',
+          payment_method: paymentMethod,
           paid_amount: amount,
-          receipt_number: receiptNumber
+          receipt_number: receiptNumber,
+          updated_at: new Date().toISOString()
         });
 
         if (contractId) {
-          await query.eq('id', contractId);
+          query = query.eq('id', contractId);
         } else {
-          await query.eq('contract_number', contractNumber);
+          query = query.eq('contract_number', contractNumber);
         }
 
-        // Insert official receipt
-        await supabase.from('receipts').insert([{
-          receipt_number: receiptNumber,
-          contract_id: contractId || '00000000-0000-0000-0000-000000000000',
-          customer_id: metadata.customer_id || '00000000-0000-0000-0000-000000000000',
-          amount: amount,
-          payment_method: paymentMethod,
-          transaction_ref: transactionRef,
-          notes: `سداد إلكتروني ناجح عبر Moyasar (${paymentMethod})`
-        }]);
+        const { data: updatedContract } = await query.select('*, customer:customers(*), container:containers(*)').single();
 
-        // Insert internal in-app notification
-        await supabase.from('notifications').insert([{
-          title: `💰 تم استلام سداد إلكتروني (${amount} ريال)`,
-          message: `تم سداد العقد (${contractNumber || contractId}) بنجاح عبر (${paymentMethod.toUpperCase()}) برقم سند ${receiptNumber}.`,
-          type: 'payment_alert',
-          is_read: false
-        }]);
+        // 4. Create official Receipt in Supabase
+        if (updatedContract) {
+          await supabase.from('receipts').insert([{
+            receipt_number: receiptNumber,
+            contract_id: updatedContract.id,
+            customer_id: updatedContract.customer_id,
+            customer_name: updatedContract.customer?.name || 'عميل المحترز',
+            amount: amount,
+            payment_method: paymentMethod,
+            transaction_reference: transactionRef,
+            contract_number: updatedContract.contract_number,
+            container_number: updatedContract.container?.container_number,
+            container_type: updatedContract.contract_type,
+            notes: 'تم التحصيل إلكترونياً بنجاح عبر سداد / مدى / Apple Pay'
+          }]);
 
+          // 5. Create in-app notification
+          await supabase.from('notifications').insert([{
+            contract_id: updatedContract.id,
+            title: `💳 سداد إلكتروني ناجح (${updatedContract.contract_number})`,
+            message: `قام العميل ${updatedContract.customer?.name} بسداد ${amount} ر.س إلكترونياً بنجاح.`,
+            type: 'payment_received'
+          }]);
+        }
       } catch (dbErr) {
-        console.error('Webhook database sync error:', dbErr);
+        console.error('Database update error on webhook:', dbErr);
       }
     }
 
     return NextResponse.json({
       success: true,
-      receipt_number: receiptNumber,
-      transaction_ref: transactionRef,
-      status: 'paid'
+      message: 'Payment processed and verified successfully'
     });
-
   } catch (error: any) {
+    console.error('Webhook error:', error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }

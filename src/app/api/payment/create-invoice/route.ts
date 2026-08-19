@@ -1,7 +1,8 @@
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
@@ -25,38 +26,31 @@ export async function POST(request: Request) {
 
       if (settings) {
         isEnabled = settings.is_enabled;
-        if (settings.secret_key) secretKey = settings.secret_key;
+        secretKey = settings.secret_key || secretKey;
       }
-    } catch (e) {
-      console.warn('Using default payment settings:', e);
+    } catch (err) {
+      console.warn('Using default payment settings for invoice:', err);
     }
 
     if (!isEnabled) {
-      return NextResponse.json({ 
-        success: false, 
-        error: 'Electronic payment gateway is currently disabled. Please use cash or direct bank transfer.' 
-      }, { status: 400 });
+      return NextResponse.json({ success: false, error: 'Electronic payment is disabled by admin' }, { status: 400 });
     }
 
-    // 2. Amount in Halalas for Moyasar (e.g. 150.00 SAR = 15000 Halalas)
-    const amountInHalalas = Math.round(Number(amount) * 100);
-    const invoiceId = `inv_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
-    
-    // In live production, this can call Moyasar API: https://api.moyasar.com/v1/invoices
-    // For seamless testing and production preview, we generate a valid invoice payment url
-    const invoiceUrl = `https://checkout.moyasar.com/invoices/${invoiceId}?contract=${encodeURIComponent(contract_number || contract_id)}&amount=${amount}`;
-
-    const whatsappMessage = `مرحباً ${customer_name || 'عزيزنا العميل'}،\nرابط سداد عقد الحاوية رقم (${contract_number || '-'}) لدى المحترز للحاويات بمبلغ (${amount} ريال سعودي).\n\n💳 للسداد الفوري عبر Apple Pay أو مدى:\n${invoiceUrl}\n\nشكراً لتعاملكم معنا.`;
+    // 2. Generate simulated or real Moyasar invoice URL
+    // In production, you would call: https://api.moyasar.com/v1/invoices
+    const invoiceId = `inv_${contract_number || Date.now()}`;
+    const invoiceUrl = `https://checkout.moyasar.com/invoices/${invoiceId}?amount=${amount}`;
 
     return NextResponse.json({
       success: true,
       invoice_id: invoiceId,
       invoice_url: invoiceUrl,
-      whatsapp_message: whatsappMessage,
-      amount: Number(amount)
+      amount,
+      contract_number,
+      message: 'Payment link generated successfully'
     });
-
   } catch (error: any) {
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error('Error creating invoice link:', error);
+    return NextResponse.json({ success: false, error: error.message || 'Internal Server Error' }, { status: 500 });
   }
 }
