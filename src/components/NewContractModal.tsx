@@ -14,9 +14,14 @@ import {
   MessageSquare,
   CheckCircle,
   AlertTriangle,
-  UserCheck
+  UserCheck,
+  CreditCard,
+  Banknote,
+  Hourglass
 } from 'lucide-react';
-import { Container, ContractPeriodType, ContainerType, Profile } from '@/types/database';
+import { Container, ContractPeriodType, ContainerType, Profile, PaymentMethod } from '@/types/database';
+
+export type PaymentChoice = 'cash' | 'sadad' | 'postpaid';
 
 interface NewContractModalProps {
   isOpen: boolean;
@@ -41,6 +46,9 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   const [selectedContainerId, setSelectedContainerId] = useState<string>('');
   const [assignedEmployeeId, setAssignedEmployeeId] = useState<string>('');
   
+  // Mandatory Payment Choice: 'cash' (نقدي فوري) | 'sadad' (إلكتروني Apple Pay/مدى) | 'postpaid' (آجل لاحقاً)
+  const [paymentChoice, setPaymentChoice] = useState<PaymentChoice>('cash');
+
   // Customer
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('+9665');
@@ -87,12 +95,16 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
         setContractType(found.type);
         setSelectedContainerId(found.id);
         if (found.type === 'debris') {
-          setTotalCost(found.daily_rate || 150);
-          setPaidAmount(found.daily_rate || 150);
+          const cost = found.daily_rate || 150;
+          setTotalCost(cost);
+          if (paymentChoice === 'cash') setPaidAmount(cost);
+          else setPaidAmount(0);
         } else {
           setPeriodType('monthly');
-          setTotalCost(found.monthly_rate || 3500);
-          setPaidAmount(found.monthly_rate || 3500);
+          const cost = found.monthly_rate || 3500;
+          setTotalCost(cost);
+          if (paymentChoice === 'cash') setPaidAmount(cost);
+          else setPaidAmount(0);
         }
       }
     }
@@ -119,21 +131,34 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
   useEffect(() => {
     const cont = containers.find(c => c.id === selectedContainerId);
     if (cont) {
+      let cost = 150;
       if (contractType === 'debris') {
-        const cost = (cont.daily_rate || 150) * durationDays;
-        setTotalCost(cost);
-        setPaidAmount(cost);
+        cost = (cont.daily_rate || 150) * durationDays;
       } else {
         const monthly = cont.monthly_rate || 3500;
         let mult = 1;
         if (periodType === 'semi_annual') mult = 6;
         if (periodType === 'annual') mult = 12;
-        const cost = monthly * mult;
-        setTotalCost(cost);
+        cost = monthly * mult;
+      }
+      setTotalCost(cost);
+      if (paymentChoice === 'cash') {
         setPaidAmount(cost);
+      } else {
+        setPaidAmount(0);
       }
     }
-  }, [selectedContainerId, contractType, periodType, durationDays, containers]);
+  }, [selectedContainerId, contractType, periodType, durationDays, containers, paymentChoice]);
+
+  // Handle Payment Choice Change
+  const handlePaymentChoiceChange = (choice: PaymentChoice) => {
+    setPaymentChoice(choice);
+    if (choice === 'cash') {
+      setPaidAmount(totalCost);
+    } else {
+      setPaidAmount(0);
+    }
+  };
 
   // Fetch Current Device GPS Location
   const handleGetCurrentLocation = () => {
@@ -169,11 +194,11 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
       setPeriodType('daily');
       setDurationDays(1);
       setTotalCost(150);
-      setPaidAmount(150);
+      setPaidAmount(paymentChoice === 'cash' ? 150 : 0);
     } else {
       setPeriodType('monthly');
       setTotalCost(3500);
-      setPaidAmount(3500);
+      setPaidAmount(paymentChoice === 'cash' ? 3500 : 0);
     }
   };
 
@@ -208,7 +233,8 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
       google_maps_url: googleMapsUrl,
       location_address: locationAddress,
       total_cost: totalCost,
-      paid_amount: paidAmount,
+      paid_amount: paymentChoice === 'cash' ? totalCost : paidAmount,
+      payment_choice: paymentChoice,
       notes: notes
     };
 
@@ -223,6 +249,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
       setSelectedContainerId('');
       setGoogleMapsUrl('');
       setLocationAddress('');
+      setPaymentChoice('cash');
     }
   };
 
@@ -230,17 +257,17 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '780px', padding: '32px' }}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '800px', padding: '32px' }}>
         
         {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
           <div>
             <h2 style={{ fontSize: '1.4rem', fontWeight: '800', color: '#ffffff', display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Truck size={24} color="var(--accent-gold)" />
               <span>توثيق وحجز عقد حاوية جديد</span>
             </h2>
             <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '2px' }}>
-              إدخال بيانات العقد، تحديد السائق المسؤول، ورابط الموقع الجغرافي
+              إدخال بيانات العقد، تحديد السائق، واختيار طريقة السداد المعتمدة
             </p>
           </div>
 
@@ -264,19 +291,107 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '22px' }}>
+        <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '20px' }}>
           
-          {/* 1. Contract Type Selector (Commercial vs Debris Only) */}
+          {/* 1. Mandatory Payment Method Section */}
+          <div style={{
+            background: 'rgba(15, 23, 42, 0.8)',
+            border: '2px solid rgba(245, 158, 11, 0.3)',
+            borderRadius: '16px',
+            padding: '16px 20px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+              <label style={{ fontSize: '0.92rem', fontWeight: '800', color: '#fbbf24', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <DollarSign size={18} />
+                <span>1. طريقة وآلية السداد المعتمدة للعقد (إجباري):</span>
+              </label>
+              <span style={{ fontSize: '0.75rem', padding: '2px 8px', borderRadius: '4px', background: 'rgba(245, 158, 11, 0.2)', color: '#fbbf24', fontWeight: 700 }}>
+                مطلوب قبل التوثيق
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
+              
+              {/* Choice 1: Cash */}
+              <div
+                onClick={() => handlePaymentChoiceChange('cash')}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: `2px solid ${paymentChoice === 'cash' ? '#10b981' : 'rgba(255, 255, 255, 0.1)'}`,
+                  background: paymentChoice === 'cash' ? 'rgba(16, 185, 129, 0.2)' : 'rgba(2, 6, 23, 0.6)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Banknote size={24} color={paymentChoice === 'cash' ? '#34d399' : '#94a3b8'} style={{ margin: '0 auto 4px auto' }} />
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: paymentChoice === 'cash' ? '#34d399' : '#ffffff' }}>
+                  💵 كاش (سداد فوري)
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                  مدفوع بالكامل + إصدار سند
+                </div>
+              </div>
+
+              {/* Choice 2: Sadad Electronic Link */}
+              <div
+                onClick={() => handlePaymentChoiceChange('sadad')}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: `2px solid ${paymentChoice === 'sadad' ? '#fbbf24' : 'rgba(255, 255, 255, 0.1)'}`,
+                  background: paymentChoice === 'sadad' ? 'rgba(245, 158, 11, 0.2)' : 'rgba(2, 6, 23, 0.6)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <CreditCard size={24} color={paymentChoice === 'sadad' ? '#fbbf24' : '#94a3b8'} style={{ margin: '0 auto 4px auto' }} />
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: paymentChoice === 'sadad' ? '#fbbf24' : '#ffffff' }}>
+                  💳 سداد (إلكتروني)
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                  رابط Apple Pay / مدى بالواتساب
+                </div>
+              </div>
+
+              {/* Choice 3: Postpaid / Later */}
+              <div
+                onClick={() => handlePaymentChoiceChange('postpaid')}
+                style={{
+                  padding: '12px 14px',
+                  borderRadius: '12px',
+                  border: `2px solid ${paymentChoice === 'postpaid' ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)'}`,
+                  background: paymentChoice === 'postpaid' ? 'rgba(14, 165, 233, 0.2)' : 'rgba(2, 6, 23, 0.6)',
+                  cursor: 'pointer',
+                  textAlign: 'center',
+                  transition: 'all 0.2s'
+                }}
+              >
+                <Hourglass size={24} color={paymentChoice === 'postpaid' ? '#38bdf8' : '#94a3b8'} style={{ margin: '0 auto 4px auto' }} />
+                <div style={{ fontSize: '0.9rem', fontWeight: 800, color: paymentChoice === 'postpaid' ? '#38bdf8' : '#ffffff' }}>
+                  ⏳ آجل (تحصيل لاحقاً)
+                </div>
+                <div style={{ fontSize: '0.72rem', color: '#94a3b8', marginTop: '2px' }}>
+                  دفع عند التنزيل أو السحب
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          {/* 2. Contract Type Selector (Commercial vs Debris Only) */}
           <div>
             <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '8px', color: '#e2e8f0' }}>
-              1. نوع الحاوية والعقد المطلوب:
+              2. نوع الحاوية والعقد:
             </label>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
               {/* Debris Daily */}
               <div
                 onClick={() => handleContractTypeChange('debris')}
                 style={{
-                  padding: '16px',
+                  padding: '14px',
                   borderRadius: '14px',
                   border: `2px solid ${contractType === 'debris' ? '#38bdf8' : 'rgba(255, 255, 255, 0.1)'}`,
                   background: contractType === 'debris' ? 'rgba(56, 189, 248, 0.15)' : 'rgba(15, 23, 42, 0.6)',
@@ -292,8 +407,8 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                     عقد يومي
                   </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '6px' }}>
-                  تأجير يومي لمخلفات البناء والترميم، مع تنبيه آلي قبل 4 ساعات من السحب.
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>
+                  تأجير يومي للبناء والترميم، مع تنبيه آلي قبل 4 ساعات من السحب.
                 </div>
               </div>
 
@@ -301,7 +416,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
               <div
                 onClick={() => handleContractTypeChange('commercial')}
                 style={{
-                  padding: '16px',
+                  padding: '14px',
                   borderRadius: '14px',
                   border: `2px solid ${contractType === 'commercial' ? '#fbbf24' : 'rgba(255, 255, 255, 0.1)'}`,
                   background: contractType === 'commercial' ? 'rgba(245, 158, 11, 0.15)' : 'rgba(15, 23, 42, 0.6)',
@@ -317,19 +432,19 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                     شهري / سنوي
                   </span>
                 </div>
-                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '6px' }}>
-                  عقود دورية للمستودعات والمجمعات، مع تنبيهات تجديد قبل 7 أيام ويومين.
+                <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '4px' }}>
+                  عقود دورية للمنشآت، مع تنبيهات تجديد قبل 7 أيام ويومين.
                 </div>
               </div>
             </div>
           </div>
 
-          {/* 2. Container Selector & Responsible Staff / Driver Selector */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+          {/* 3. Container Selector & Responsible Staff / Driver Selector */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             {/* Container */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                2. الحاوية المتاحة للتأجير:
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+                3. الحاوية المتاحة:
               </label>
               <select
                 className="form-select"
@@ -337,7 +452,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                 onChange={(e) => setSelectedContainerId(e.target.value)}
                 required
               >
-                <option value="">-- اختر حاوية متاحة ({availableContainers.length} متاحة) --</option>
+                <option value="">-- اختر حاوية ({availableContainers.length} متاحة) --</option>
                 {availableContainers.map(cont => (
                   <option key={cont.id} value={cont.id}>
                     {cont.container_number} — {contractType === 'debris' ? `${cont.daily_rate} ر.س/يوم` : `${cont.monthly_rate} ر.س/شهر`}
@@ -348,8 +463,8 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
 
             {/* Responsible Driver / Staff Dropdown */}
             <div>
-              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#34d399' }}>
-                3. المسؤول (سائق التوصيل 🚛 / موظف المتابعة 👷):
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#34d399' }}>
+                4. المسؤول (سائق التوصيل 🚛 / موظف المتابعة 👷):
               </label>
               <select
                 className="form-select"
@@ -357,7 +472,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
                 onChange={(e) => setAssignedEmployeeId(e.target.value)}
                 style={{ borderColor: 'rgba(16, 185, 129, 0.4)', background: 'rgba(16, 185, 129, 0.08)' }}
               >
-                <option value="">-- اختر السائق أو الموظف المسؤول --</option>
+                <option value="">-- اختر السائق أو الموظف --</option>
                 {activeStaff.map(staff => (
                   <option key={staff.id} value={staff.id}>
                     {staff.full_name} ({staff.phone})
@@ -367,10 +482,10 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
           </div>
 
-          {/* 3. Customer Info */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '18px' }}>
+          {/* 4. Customer Info */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
             <div>
-              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
                 اسم العميل أو المقاول:
               </label>
               <div style={{ position: 'relative' }}>
@@ -388,8 +503,8 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
 
             <div>
-              <label style={{ display: 'block', fontSize: '0.88rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                رقم جوال العميل (لإشعارات الواتساب):
+              <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
+                رقم جوال العميل (للواتساب والسداد):
               </label>
               <div style={{ position: 'relative' }}>
                 <Phone size={16} color="#94a3b8" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)' }} />
@@ -406,12 +521,12 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
           </div>
 
-          {/* 4. Dates & Durations */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '14px' }}>
+          {/* 5. Dates & Durations */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '12px' }}>
             {contractType === 'debris' ? (
               <div>
                 <label style={{ display: 'block', fontSize: '0.85rem', fontWeight: '700', marginBottom: '6px', color: '#e2e8f0' }}>
-                  عدد الأيام (عقد يومي):
+                  عدد الأيام (يومي):
                 </label>
                 <input
                   type="number"
@@ -467,10 +582,10 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
           </div>
 
-          {/* 5. GPS Location & Google Maps */}
+          {/* 6. GPS Location & Google Maps */}
           <div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label style={{ fontSize: '0.88rem', fontWeight: '700', color: '#e2e8f0' }}>
+              <label style={{ fontSize: '0.85rem', fontWeight: '700', color: '#e2e8f0' }}>
                 الموقع الجغرافي ورابط خرائط Google:
               </label>
               <button
@@ -496,7 +611,7 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
               </button>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <input
                 type="text"
                 className="form-input"
@@ -515,12 +630,12 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
             </div>
           </div>
 
-          {/* 6. Pricing Summary */}
+          {/* 7. Pricing Summary Strip */}
           <div style={{
             background: 'rgba(15, 23, 42, 0.7)',
             border: '1px solid rgba(255, 255, 255, 0.1)',
             borderRadius: '12px',
-            padding: '16px',
+            padding: '14px 18px',
             display: 'grid',
             gridTemplateColumns: 'repeat(3, 1fr)',
             gap: '12px',
@@ -533,27 +648,21 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
               </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المبلغ المدفوع</div>
-              <input
-                type="number"
-                min="0"
-                max={totalCost}
-                className="form-input"
-                style={{ textAlign: 'center', padding: '4px', fontSize: '1rem', fontWeight: 800, marginTop: '4px' }}
-                value={paidAmount}
-                onChange={(e) => setPaidAmount(Number(e.target.value))}
-              />
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المبلغ المدفوع الآن</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '900', color: paymentChoice === 'cash' ? '#34d399' : '#38bdf8' }}>
+                {paymentChoice === 'cash' ? totalCost : paidAmount} ر.س
+              </div>
             </div>
             <div>
-              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المتبقي المستحق</div>
-              <div style={{ fontSize: '1.25rem', fontWeight: '900', color: (totalCost - paidAmount) > 0 ? '#f87171' : '#34d399' }}>
-                {(totalCost - paidAmount)} ر.س
+              <div style={{ fontSize: '0.78rem', color: '#94a3b8' }}>المتبقي المطلوب</div>
+              <div style={{ fontSize: '1.25rem', fontWeight: '900', color: paymentChoice === 'cash' ? '#34d399' : '#f87171' }}>
+                {paymentChoice === 'cash' ? 0 : totalCost} ر.س
               </div>
             </div>
           </div>
 
           {/* Actions */}
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '6px' }}>
             <button
               type="button"
               className="btn-secondary"
@@ -567,9 +676,9 @@ export const NewContractModal: React.FC<NewContractModalProps> = ({
               type="submit"
               className="btn-primary"
               disabled={isSaving}
-              style={{ minWidth: '180px' }}
+              style={{ minWidth: '220px', padding: '10px 24px', fontSize: '0.95rem' }}
             >
-              {isSaving ? 'جارٍ توثيق العقد...' : 'توثيق العقد وإصدار التنبيهات'}
+              {isSaving ? 'جارٍ توثيق العقد...' : `توثيق العقد (${paymentChoice === 'cash' ? 'كاش وسند فوري' : paymentChoice === 'sadad' ? 'إرسال رابط سداد' : 'تسجيل كآجل'})`}
             </button>
           </div>
 

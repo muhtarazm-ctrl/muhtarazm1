@@ -599,6 +599,14 @@ export default function Home() {
     const assignedStaff = staffList.find(s => s.id === contractData.assigned_employee_id) || staffList[1];
     const receiptNumber = `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const isCash = contractData.payment_choice === 'cash';
+    const isSadad = contractData.payment_choice === 'sadad';
+    const totalCost = contractData.total_cost;
+    const paidAmount = isCash ? totalCost : (contractData.paid_amount || 0);
+    const remainingAmount = isCash ? 0 : (totalCost - paidAmount);
+    const paymentStatus: PaymentStatus = isCash ? 'paid' : (paidAmount > 0 ? 'partially_paid' : 'unpaid');
+    const paymentMethod: PaymentMethod = isCash ? 'cash' : (isSadad ? 'mada' : 'cash');
+
     const newContract: Contract = {
       id: `contract-${Date.now()}`,
       contract_number: contractData.contract_number,
@@ -616,12 +624,12 @@ export default function Home() {
       location_longitude: contractData.location_longitude,
       google_maps_url: contractData.google_maps_url,
       location_address: contractData.location_address,
-      total_cost: contractData.total_cost,
-      paid_amount: contractData.paid_amount,
-      remaining_amount: contractData.total_cost - contractData.paid_amount,
-      payment_status: (contractData.total_cost - contractData.paid_amount) <= 0 ? 'paid' : 'partially_paid',
-      payment_method: 'cash',
-      receipt_number: receiptNumber,
+      total_cost: totalCost,
+      paid_amount: paidAmount,
+      remaining_amount: remainingAmount,
+      payment_status: paymentStatus,
+      payment_method: paymentMethod,
+      receipt_number: isCash ? receiptNumber : undefined,
       status: 'active',
       notes: contractData.notes,
       created_at: new Date().toISOString(),
@@ -635,8 +643,36 @@ export default function Home() {
     setContracts(prev => [newContract, ...prev]);
     setContainers(prev => prev.map(c => c.id === contractData.container_id ? { ...c, status: 'rented' } : c));
 
+    // If Cash: Create Receipt immediately
+    if (isCash) {
+      const newReceipt: Receipt = {
+        id: `rcp-${Date.now()}`,
+        receipt_number: receiptNumber,
+        contract_id: newContract.id,
+        customer_id: customerObj.id,
+        customer_name: customerObj.name,
+        amount: totalCost,
+        payment_method: 'cash',
+        contract_number: newContract.contract_number,
+        container_number: containerObj?.container_number,
+        container_type: newContract.contract_type,
+        issued_at: new Date().toISOString(),
+        notes: 'تم الاستلام نقداً (كاش فوري عند توثيق العقد)'
+      };
+      setReceipts(prev => [newReceipt, ...prev]);
+      // Open PDF Receipt Modal immediately
+      setSelectedReceiptContract(newContract);
+    }
+
     // Auto-generate notification for WhatsApp
-    const messageContent = `مرحباً ${customerObj.name}، تم توثيق عقدك رقم (${newContract.contract_number}) بنجاح لدى المحترز للحاويات. رقم الحاوية: ${containerObj?.container_number || '-'}. شكراً لثقتكم بنا.`;
+    let messageContent = `مرحباً ${customerObj.name}، تم توثيق عقدك رقم (${newContract.contract_number}) بنجاح لدى المحترز للحاويات. رقم الحاوية: ${containerObj?.container_number || '-'}. شكراً لثقتكم بنا.`;
+    
+    // If Sadad: Append electronic payment invoice link
+    if (isSadad) {
+      const invoiceLink = `https://checkout.moyasar.com/invoices/inv_${newContract.contract_number}?amount=${totalCost}`;
+      messageContent += `\n\n💳 للسداد الفوري عبر Apple Pay أو مدى:\n${invoiceLink}`;
+    }
+
     const newNotif: NotificationLog = {
       id: `notif-${Date.now()}`,
       contract_id: newContract.id,
@@ -657,13 +693,18 @@ export default function Home() {
     const newInApp: InAppNotification = {
       id: `inapp-${Date.now()}`,
       contract_id: newContract.id,
-      title: `📝 تم تسجيل عقد جديد (${newContract.contract_number})`,
-      message: `تم توثيق عقد جديد للعميل ${customerObj.name} بالحاوية (${containerObj?.container_number || '-'}). المسؤول: ${assignedStaff?.full_name || 'سائق'}.`,
+      title: `📝 عقد جديد (${newContract.contract_number}) - ${isCash ? 'مدفوع كاش 💵' : isSadad ? 'سداد إلكتروني 💳' : 'آجل ⏳'}`,
+      message: `تم توثيق عقد للعميل ${customerObj.name} بالحاوية (${containerObj?.container_number || '-'}). المسؤول: ${assignedStaff?.full_name || 'سائق'}.`,
       type: 'contract_created',
       is_read: false,
       created_at: new Date().toISOString()
     };
     setInAppNotifications(prev => [newInApp, ...prev]);
+
+    // Send WhatsApp if Sadad or general notice
+    if (customerObj.phone) {
+      handleSendWhatsApp(customerObj.phone, messageContent);
+    }
 
     // 🚀 Automatically send server-side WhatsApp message if Evolution API mode
     if (gatewaySettings.auto_send_enabled && gatewaySettings.mode === 'evolution') {
