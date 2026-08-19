@@ -1,7 +1,9 @@
+// Moyasar Payment Webhook - Force Dynamic Execution on Render
+export const dynamic = 'force-dynamic';
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { supabase } from '@/lib/supabase';
-
-export const dynamic = 'force-dynamic';
 
 export async function POST(request: Request) {
   try {
