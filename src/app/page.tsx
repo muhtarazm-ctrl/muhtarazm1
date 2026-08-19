@@ -29,6 +29,7 @@ import { WhatsAppSettings } from '@/components/WhatsAppSettings';
 import { PaymentSettings } from '@/components/PaymentSettings';
 import { NewContractModal } from '@/components/NewContractModal';
 import { ReceiptModal } from '@/components/ReceiptModal';
+import { ExtendContractModal } from '@/components/ExtendContractModal';
 
 // Sample Seed Data
 const initialStaff: Profile[] = [
@@ -267,6 +268,9 @@ export default function Home() {
   // Payment Receipt Modal State
   const [selectedReceiptContract, setSelectedReceiptContract] = useState<Contract | null>(null);
 
+  // Extend Contract Modal State
+  const [selectedExtendContract, setSelectedExtendContract] = useState<Contract | null>(null);
+
   // Fetch initial data from Supabase if connected
   useEffect(() => {
     const fetchSupabaseData = async () => {
@@ -495,6 +499,111 @@ export default function Home() {
         );
       }
     }
+  };
+
+  // 3. [🔄 تمديد العقد] - Extend & Renew Contract
+  const handleConfirmExtension = async (
+    contractId: string,
+    additionalDays: number,
+    additionalCost: number,
+    paymentChoice: 'cash' | 'sadad' | 'postpaid',
+    newEndDate: string
+  ): Promise<boolean> => {
+    const contract = contracts.find(c => c.id === contractId);
+    if (!contract) return false;
+
+    const receiptNumber = `RCP-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    const isCash = paymentChoice === 'cash';
+    const isSadad = paymentChoice === 'sadad';
+
+    const newTotalCost = contract.total_cost + additionalCost;
+    const newPaidAmount = isCash ? (contract.paid_amount + additionalCost) : contract.paid_amount;
+    const newRemainingAmount = isCash ? (contract.remaining_amount || 0) : ((contract.remaining_amount || 0) + additionalCost);
+    const newStatus: ContractStatus = 'extended';
+
+    const updatedContract: Contract = {
+      ...contract,
+      duration_days: (contract.duration_days || 1) + additionalDays,
+      end_date: newEndDate,
+      expected_pickup_time: newEndDate,
+      total_cost: newTotalCost,
+      paid_amount: newPaidAmount,
+      remaining_amount: newRemainingAmount,
+      status: newStatus,
+      receipt_number: isCash ? receiptNumber : contract.receipt_number
+    };
+
+    // Update Local State
+    setContracts(prev => prev.map(c => c.id === contractId ? updatedContract : c));
+
+    // If Cash: Create Receipt for the extension payment
+    if (isCash) {
+      const newReceipt: Receipt = {
+        id: `rcp-${Date.now()}`,
+        receipt_number: receiptNumber,
+        contract_id: contract.id,
+        customer_id: contract.customer_id,
+        customer_name: contract.customer?.name || 'العميل',
+        amount: additionalCost,
+        payment_method: 'cash',
+        contract_number: contract.contract_number,
+        container_number: contract.container?.container_number,
+        container_type: contract.contract_type,
+        issued_at: new Date().toISOString(),
+        notes: `سند قبض تمديد عقد (+${additionalDays} يوم) نقداً كاش`
+      };
+      setReceipts(prev => [newReceipt, ...prev]);
+      setSelectedReceiptContract(updatedContract);
+    }
+
+    // Prepare WhatsApp Message
+    const formattedDate = new Date(newEndDate).toLocaleDateString('ar-SA');
+    let messageContent = `مرحباً ${contract.customer?.name}، تم تمديد عقد الحاوية (${contract.contract_number}) بنجاح بمقدار (+${additionalDays} يوم) حتى تاريخ: ${formattedDate}. قيمة التمديد: ${additionalCost} ر.س.`;
+
+    if (isSadad) {
+      const invoiceLink = `https://checkout.moyasar.com/invoices/inv_${contract.contract_number}_ext?amount=${additionalCost}`;
+      messageContent += `\n\n💳 رابط سداد التمديد عبر Apple Pay ومدى:\n${invoiceLink}`;
+    }
+
+    // In-App Notification (🔔)
+    const inAppNotif: InAppNotification = {
+      id: `inapp-${Date.now()}`,
+      contract_id: contract.id,
+      title: `🔄 تم تمديد العقد (${contract.contract_number})`,
+      message: `تم تمديد الحاوية (${contract.container?.container_number || '-'}) بمقدار +${additionalDays} يوم. موعد السحب الجديد: ${formattedDate}.`,
+      type: 'contract_created',
+      is_read: false,
+      created_at: new Date().toISOString()
+    };
+    setInAppNotifications(prev => [inAppNotif, ...prev]);
+
+    // Send WhatsApp
+    if (contract.customer?.phone) {
+      handleSendWhatsApp(contract.customer.phone, messageContent);
+    }
+
+    // Trigger celebration
+    confetti({
+      particleCount: 60,
+      spread: 50,
+      origin: { y: 0.6 }
+    });
+
+    // Sync to Supabase
+    try {
+      await supabase.from('contracts').update({
+        duration_days: updatedContract.duration_days,
+        end_date: updatedContract.end_date,
+        expected_pickup_time: updatedContract.expected_pickup_time,
+        total_cost: updatedContract.total_cost,
+        paid_amount: updatedContract.paid_amount,
+        status: updatedContract.status
+      }).eq('id', contract.id);
+    } catch (e) {
+      console.warn('Synced extension locally:', e);
+    }
+
+    return true;
   };
 
   // Container Status Update Handler
@@ -848,6 +957,7 @@ export default function Home() {
             }}
             onSendWhatsApp={handleSendWhatsApp}
             onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
+            onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
             onConfirmCashPayment={handleConfirmCashPayment}
             onSendSadadLink={handleSendSadadLink}
           />
@@ -876,6 +986,7 @@ export default function Home() {
             onDeleteContract={handleDeleteContract}
             onSendWhatsApp={handleSendWhatsApp}
             onOpenReceipt={(contract) => setSelectedReceiptContract(contract)}
+            onOpenExtendModal={(contract) => setSelectedExtendContract(contract)}
             onConfirmCashPayment={handleConfirmCashPayment}
             onSendSadadLink={handleSendSadadLink}
           />
@@ -934,6 +1045,14 @@ export default function Home() {
         onClose={() => setSelectedReceiptContract(null)}
         contract={selectedReceiptContract}
         onSendWhatsAppReceipt={handleSendWhatsApp}
+      />
+
+      {/* 6. Extend / Renew Contract Modal */}
+      <ExtendContractModal
+        isOpen={!!selectedExtendContract}
+        onClose={() => setSelectedExtendContract(null)}
+        contract={selectedExtendContract}
+        onConfirmExtension={handleConfirmExtension}
       />
 
       {/* Footer */}

@@ -26,6 +26,7 @@ interface SmartSearchProps {
   onViewContract?: (contract: Contract) => void;
   onSendWhatsApp?: (phone: string, message: string) => void;
   onOpenReceipt?: (contract: Contract) => void;
+  onOpenExtendModal?: (contract: Contract) => void;
   onConfirmCashPayment?: (contract: Contract) => Promise<void>;
   onSendSadadLink?: (contract: Contract) => Promise<void>;
 }
@@ -39,6 +40,7 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
   onViewContract,
   onSendWhatsApp,
   onOpenReceipt,
+  onOpenExtendModal,
   onConfirmCashPayment,
   onSendSadadLink
 }) => {
@@ -471,18 +473,30 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                       {' '}| المتبقي: <strong style={{ color: (contract.total_cost - contract.paid_amount) > 0 ? '#f87171' : '#34d399' }}>{(contract.total_cost - contract.paid_amount)} ر.س</strong>
                     </span>
 
-                    {/* Simple Payment Actions */}
+                    {/* Simple Payment Actions + Extension */}
                     <div style={{ display: 'flex', gap: '6px' }}>
                       {(contract.total_cost - contract.paid_amount) <= 0 || contract.payment_status === 'paid' ? (
-                        onOpenReceipt && (
-                          <button
-                            className="btn-emerald"
-                            style={{ padding: '6px 12px', fontSize: '0.78rem' }}
-                            onClick={() => onOpenReceipt(contract)}
-                          >
-                            <span>📄 سند القبض</span>
-                          </button>
-                        )
+                        <>
+                          {onOpenReceipt && (
+                            <button
+                              className="btn-emerald"
+                              style={{ padding: '6px 10px', fontSize: '0.78rem' }}
+                              onClick={() => onOpenReceipt(contract)}
+                            >
+                              <span>📄 سند القبض</span>
+                            </button>
+                          )}
+                          {onOpenExtendModal && (
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: '6px 8px', fontSize: '0.78rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                              onClick={() => onOpenExtendModal(contract)}
+                              title="تمديد العقد"
+                            >
+                              <span>🔄 تمديد</span>
+                            </button>
+                          )}
+                        </>
                       ) : (
                         <>
                           {onConfirmCashPayment && (
@@ -501,6 +515,16 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
                               onClick={() => onSendSadadLink(contract)}
                             >
                               <span>💳 سداد</span>
+                            </button>
+                          )}
+                          {onOpenExtendModal && (
+                            <button
+                              className="btn-secondary"
+                              style={{ padding: '6px 8px', fontSize: '0.78rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                              onClick={() => onOpenExtendModal(contract)}
+                              title="تمديد العقد"
+                            >
+                              <span>🔄</span>
                             </button>
                           )}
                         </>

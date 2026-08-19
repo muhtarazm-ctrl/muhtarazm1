@@ -18,7 +18,8 @@ import {
   Banknote,
   Receipt as ReceiptIcon,
   Truck,
-  UserCheck
+  UserCheck,
+  RotateCw
 } from 'lucide-react';
 import { Contract, ContractStatus, UserRole, PaymentSettings } from '@/types/database';
 
@@ -30,6 +31,7 @@ interface ContractsViewProps {
   onDeleteContract: (contractId: string) => Promise<void>;
   onSendWhatsApp: (phone: string, message: string) => void;
   onOpenReceipt: (contract: Contract) => void;
+  onOpenExtendModal: (contract: Contract) => void;
   onConfirmCashPayment: (contract: Contract) => Promise<void>;
   onSendSadadLink: (contract: Contract) => Promise<void>;
 }
@@ -42,6 +44,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
   onDeleteContract,
   onSendWhatsApp,
   onOpenReceipt,
+  onOpenExtendModal,
   onConfirmCashPayment,
   onSendSadadLink
 }) => {
@@ -70,18 +73,18 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
     const diffMs = end.getTime() - now.getTime();
     
     if (contract.status === 'completed') {
-      return { text: 'مكتمل ومستلم', color: '#34d399', isUrgent: false };
+      return { text: 'مكتمل ومستلم ✅', color: '#34d399', isUrgent: false };
     }
     
     if (diffMs < 0) {
-      return { text: 'منتهي الصلاحية (مستحق السحب/التجديد)', color: '#f87171', isUrgent: true };
+      return { text: 'منتهي الصلاحية (مستحق السحب أو التمديد)', color: '#f87171', isUrgent: true };
     }
 
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
     const diffDays = Math.floor(diffHours / 24);
 
     if (diffHours <= 6) {
-      return { text: `متبقي ${diffHours} ساعة فقط على موعد السحب`, color: '#f59e0b', isUrgent: true };
+      return { text: `متبقي ${diffHours} ساعة فقط على موعد السحب ⚠️`, color: '#f59e0b', isUrgent: true };
     }
     if (diffDays === 0) {
       return { text: `ينتهي اليوم (متبقي ${diffHours} ساعة)`, color: '#fbbf24', isUrgent: true };
@@ -117,7 +120,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
             سجل العقود والتأجير والتحصيل
           </h2>
           <p style={{ fontSize: '0.88rem', color: '#94a3b8' }}>
-            متابعة العقود، مواعيد السحب والتجديد، السداد السريع (كاش أو سداد)، وسندات القبض
+            متابعة العقود، مواعيد السحب، التمديد الفوري [🔄 تمديد]، السداد (كاش أو سداد)، وسندات القبض
           </p>
         </div>
       </div>
@@ -205,8 +208,8 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
           >
             <option value="all">كافة الحالات</option>
             <option value="active">العقود النشطة</option>
+            <option value="extended">الممددة 🔄</option>
             <option value="completed">المكتملة والمستلمة</option>
-            <option value="extended">الممددة</option>
             <option value="cancelled">الملغاة</option>
           </select>
         </div>
@@ -215,7 +218,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
       {/* Contracts Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(370px, 1fr))',
         gap: '20px'
       }}>
         {filteredContracts.map((contract) => {
@@ -233,13 +236,13 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 display: 'flex',
                 flexDirection: 'column',
                 gap: '14px',
-                borderRight: `4px solid ${contract.contract_type === 'commercial' ? 'var(--accent-gold)' : '#38bdf8'}`
+                borderRight: `4px solid ${contract.status === 'extended' ? '#10b981' : contract.contract_type === 'commercial' ? 'var(--accent-gold)' : '#38bdf8'}`
               }}
             >
               {/* Header */}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                     <span style={{ fontSize: '1.15rem', fontWeight: '800', color: '#ffffff' }}>
                       {contract.contract_number}
                     </span>
@@ -254,6 +257,19 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                     }}>
                       {contract.contract_type === 'commercial' ? 'تجاري' : 'أنقاض يومي'}
                     </span>
+                    {contract.status === 'extended' && (
+                      <span style={{
+                        padding: '2px 8px',
+                        borderRadius: '6px',
+                        fontSize: '0.72rem',
+                        fontWeight: 800,
+                        background: 'rgba(16, 185, 129, 0.2)',
+                        color: '#34d399',
+                        border: '1px solid rgba(16, 185, 129, 0.4)'
+                      }}>
+                        ممدد 🔄
+                      </span>
+                    )}
                   </div>
                   <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '2px' }}>
                     حاوية: <strong style={{ color: '#ffffff' }}>{contract.container?.container_number || 'غير محددة'}</strong>
@@ -339,7 +355,7 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
               <div style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px',
+                justifyContent: 'space-between',
                 fontSize: '0.85rem',
                 color: timing.color,
                 background: timing.isUrgent ? 'rgba(245, 158, 11, 0.12)' : 'rgba(255, 255, 255, 0.04)',
@@ -347,8 +363,34 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 borderRadius: '8px',
                 border: timing.isUrgent ? '1px solid rgba(245, 158, 11, 0.3)' : '1px solid rgba(255, 255, 255, 0.08)'
               }}>
-                <Clock size={15} />
-                <span style={{ fontWeight: 600 }}>{timing.text}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Clock size={15} />
+                  <span style={{ fontWeight: 600 }}>{timing.text}</span>
+                </div>
+
+                {/* 🔄 Quick Extension Button */}
+                {contract.status !== 'completed' && (
+                  <button
+                    onClick={() => onOpenExtendModal(contract)}
+                    style={{
+                      background: 'rgba(56, 189, 248, 0.15)',
+                      border: '1px solid rgba(56, 189, 248, 0.3)',
+                      color: '#38bdf8',
+                      padding: '3px 8px',
+                      borderRadius: '6px',
+                      fontSize: '0.75rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title="تمديد فترة العقد وتأجيل موعد السحب"
+                  >
+                    <RotateCw size={12} />
+                    <span>تمديد</span>
+                  </button>
+                )}
               </div>
 
               {/* Location Google Maps */}
@@ -412,13 +454,13 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                   }}
                 >
                   <option value="active">نشط</option>
+                  <option value="extended">ممدد 🔄</option>
                   <option value="completed">مكتمل ومستلم</option>
-                  <option value="extended">ممدد</option>
                   <option value="cancelled">ملغي</option>
                 </select>
               </div>
 
-              {/* ⚡ Simple Payment Actions: [كاش] أو [سداد] أو [سند القبض] */}
+              {/* Simple Payment & Extension Actions: [كاش] أو [سداد] أو [سند القبض] + [🔄 تمديد] */}
               <div style={{
                 display: 'flex',
                 gap: '10px',
@@ -426,15 +468,27 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                 borderTop: '1px solid rgba(255, 255, 255, 0.08)'
               }}>
                 {isPaid ? (
-                  /* When Paid: Show Receipt PDF Button */
-                  <button
-                    onClick={() => onOpenReceipt(contract)}
-                    className="btn-emerald"
-                    style={{ flex: 1, padding: '9px 14px', fontSize: '0.88rem', justifyContent: 'center' }}
-                  >
-                    <ReceiptIcon size={16} />
-                    <span>📄 سند القبض (PDF)</span>
-                  </button>
+                  /* When Paid: Show Receipt PDF Button + Extend Option */
+                  <div style={{ display: 'flex', gap: '8px', width: '100%' }}>
+                    <button
+                      onClick={() => onOpenReceipt(contract)}
+                      className="btn-emerald"
+                      style={{ flex: 1, padding: '9px 12px', fontSize: '0.85rem', justifyContent: 'center' }}
+                    >
+                      <ReceiptIcon size={16} />
+                      <span>📄 سند القبض</span>
+                    </button>
+
+                    <button
+                      onClick={() => onOpenExtendModal(contract)}
+                      className="btn-secondary"
+                      style={{ padding: '9px 14px', fontSize: '0.85rem', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                      title="تمديد العقد لفترة إضافية"
+                    >
+                      <RotateCw size={15} />
+                      <span>🔄 تمديد</span>
+                    </button>
+                  </div>
                 ) : (
                   /* When Unpaid: 2 Clean Direct Options only: [كاش] | [سداد] */
                   <>
@@ -473,6 +527,16 @@ export const ContractsView: React.FC<ContractsViewProps> = ({
                     >
                       <CreditCard size={17} />
                       <span>{loadingActionId === `sadad-${contract.id}` ? 'جارٍ الإرسال...' : '💳 سداد'}</span>
+                    </button>
+
+                    {/* Option 3: Extend */}
+                    <button
+                      onClick={() => onOpenExtendModal(contract)}
+                      className="btn-secondary"
+                      style={{ padding: '9px 12px', color: '#38bdf8', borderColor: 'rgba(56, 189, 248, 0.3)' }}
+                      title="تمديد العقد"
+                    >
+                      <RotateCw size={16} />
                     </button>
                   </>
                 )}
