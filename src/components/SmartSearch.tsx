@@ -38,6 +38,9 @@ export const SmartSearch: React.FC<SmartSearchProps> = ({
   onOpenNewContractWithContainer,
   onViewContract,
   onSendWhatsApp,
+  onOpenReceipt,
+  onConfirmCashPayment,
+  onSendSadadLink
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<'all' | 'commercial' | 'debris' | 'customers' | 'contracts'>('all');
